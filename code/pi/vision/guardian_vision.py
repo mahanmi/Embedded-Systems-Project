@@ -225,12 +225,174 @@ class MjpegSource:
         del self.buf[:end]
         return frame
 
+    def read_image(self):
+        """Decoded BGR frame, or None. The interface both sources share.
+
+        The main loop used to call read_frame() and decode the JPEG itself.
+        Moving the decode in here lets an RTSP source -- which never has a JPEG
+        in the first place -- present the same interface without inventing one
+        just to have it thrown away again.
+        """
+        jpeg = self.read_frame()
+        if jpeg is None:
+            return None
+        return cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
+
     def close(self) -> None:
         self._drop("shutting down")
         try:
             self.srv.close()
         except OSError:
             pass
+
+
+class RtspSource:
+    """Pulls H.264 from an RTSP camera or DVR through OpenCV's FFMPEG backend.
+
+    Used when the board has a real camera on the network instead of a laptop
+    pushing its webcam at us. The stream is decoded here and handed on as BGR,
+    so nothing downstream changes.
+
+    WHY THERE IS A THREAD IN HERE
+    -----------------------------
+    This is the part that is easy to get wrong and hard to notice. The DVR
+    pushes frames at its own rate (12 fps on the sub-stream); the detector
+    consumes at target_fps or slower, and slower still whenever inference is
+    running. FFmpeg buffers the difference internally, so a plain cap.read()
+    on the main loop hands back the OLDEST queued frame, not the newest -- and
+    the backlog grows for as long as the process runs. The picture stays
+    perfectly smooth while drifting further and further into the past, which is
+    exactly the kind of fault nobody spots until a latency measurement is taken
+    weeks later.
+
+    CAP_PROP_BUFFERSIZE=1 is the documented fix and the FFMPEG backend widely
+    ignores it, so it cannot be relied on. Instead a daemon thread reads flat
+    out -- consuming frames as fast as they arrive, which is what keeps the
+    queue empty -- and overwrites a single slot. read_image() returns whatever
+    is in the slot right now. Frames are dropped at the source, deliberately,
+    which is the same rule the MJPEG path already follows.
+    """
+
+    def __init__(self, host: str, port: int, channel: str, user: str,
+                 password: str, transport: str = "tcp"):
+        # Must be set before the first VideoCapture: OpenCV reads it when it
+        # constructs the backend, not per-call. TCP because UDP silently loses
+        # slices on a busy network and the artefacts look like camera faults.
+        os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS",
+                              f"rtsp_transport;{transport}")
+
+        self._url = (f"rtsp://{user}:{password}@{host}:{port}"
+                     f"/Streaming/Channels/{channel}")
+        # Kept for logging. The password never appears in a log line, a
+        # journal entry or an exception message.
+        self.safe_url = (f"rtsp://{user}:***@{host}:{port}"
+                         f"/Streaming/Channels/{channel}")
+
+        # A Condition rather than a bare Lock, because read_image() has to
+        # BLOCK until a frame is actually available. The MJPEG source paces the
+        # main loop for free -- its socket read blocks -- and if this one
+        # returned None the instant no new frame had arrived, the loop would
+        # spin flat out on an empty slot and burn a core for nothing.
+        self._cond = threading.Condition()
+        self._latest = None          # newest decoded frame
+        self._stamp = 0.0            # when it was decoded
+        self._seq = 0                # bumped per frame; how a waiter spots a new one
+        self._running = True
+        self._connected = False
+        self._thread = threading.Thread(target=self._pump, name="rtsp",
+                                        daemon=True)
+        self._thread.start()
+        log(f"rtsp source: {self.safe_url} ({transport})")
+
+    def _open(self):
+        cap = cv2.VideoCapture(self._url, cv2.CAP_FFMPEG)
+        if not cap.isOpened():
+            cap.release()
+            return None
+        # Harmless if ignored, helpful on backends that honour it.
+        try:
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        except Exception:                                     # noqa: BLE001
+            pass
+        return cap
+
+    def _pump(self) -> None:
+        backoff = 2.0
+        cap = None
+        while self._running:
+            if cap is None:
+                cap = self._open()
+                if cap is None:
+                    warn(f"rtsp: cannot open {self.safe_url}, "
+                         f"retrying in {backoff:.0f}s")
+                    self._connected = False
+                    time.sleep(backoff)
+                    backoff = min(backoff * 2, 30.0)
+                    continue
+                backoff = 2.0
+                log(f"rtsp: connected to {self.safe_url}")
+                self._connected = True
+
+            ok, frame = cap.read()
+            if not ok or frame is None:
+                # A DVR drops connections on its own schedule; treat any read
+                # failure as a disconnect and rebuild rather than spinning on a
+                # dead handle.
+                warn("rtsp: stream ended, reconnecting")
+                self._connected = False
+                cap.release()
+                cap = None
+                with self._cond:
+                    self._cond.notify_all()      # unblock a waiting reader
+                continue
+
+            with self._cond:
+                self._latest = frame
+                self._stamp = time.monotonic()
+                self._seq += 1
+                self._cond.notify_all()
+
+        if cap is not None:
+            cap.release()
+
+    def read_image(self, timeout: float = 1.0):
+        """Block for up to `timeout` for the newest frame; None if none came.
+
+        Two properties matter here:
+
+        * It waits, so the caller is paced by the camera exactly as the MJPEG
+          source is paced by its socket. No busy loop.
+        * It returns the CURRENT slot, never a queue. If the detector was busy
+          for three frame times, the two intermediate frames are gone -- which
+          is the point. Serving them would be serving the past.
+
+        None while disconnected, rather than the last good frame: the software
+        watchdog decides the camera is gone from the age of the last real
+        frame, and quietly re-serving a stale one forever would hide exactly
+        the fault it exists to catch.
+        """
+        with self._cond:
+            # The slot is emptied on every read, so "is it empty" is the whole
+            # question -- no sequence comparison needed. If a frame is already
+            # waiting we take it without sleeping; if not, we block until the
+            # pump notifies or the timeout expires.
+            if self._latest is None:
+                self._cond.wait(timeout)
+            if self._latest is None:
+                return None
+            frame, stamp = self._latest, self._stamp
+            self._latest = None          # consume: never serve the same twice
+        if time.monotonic() - stamp > 5.0:
+            return None                  # decoded, but too old to be truthful
+        return frame
+
+    @property
+    def connected(self) -> bool:
+        return self._connected
+
+    def close(self) -> None:
+        self._running = False
+        self._thread.join(timeout=3.0)
 
 
 # ------------------------------------------------------------------- overlay
@@ -407,7 +569,35 @@ def main() -> int:
     infer_thread = threading.Thread(target=infer_worker, name="infer", daemon=True)
     infer_thread.start()
 
-    src = MjpegSource(args.listen_fd, args.listen_port)
+    # --- frame source ------------------------------------------------------
+    # Two ways in, chosen by configuration so switching back is a one-line edit
+    # and the already-measured webcam experiments stay reproducible:
+    #
+    #   socket -- a capture host pushes MJPEG at guardian-ingest.socket. The
+    #             brief's fallback for a board with no camera of its own.
+    #   rtsp   -- the board pulls H.264 from a camera or DVR on the LAN. No
+    #             laptop in the loop at all.
+    cam_source = cfg.get("camera_source", "socket").strip().lower()
+
+    if cam_source == "rtsp":
+        cam_pass = os.environ.get("GUARDIAN_CAM_PASS", "")
+        if not cam_pass:
+            # Refuse rather than fall back silently: dropping to the socket
+            # path here would leave a "working" system quietly watching the
+            # wrong camera, which is worse than not starting.
+            warn("camera_source=rtsp but GUARDIAN_CAM_PASS is not set "
+                 "(EnvironmentFile=/etc/guardian/secrets.env missing from the unit?)")
+            return 1
+        src = RtspSource(
+            host=cfg.get("camera_host", "192.168.100.64"),
+            port=int(cfg.get("camera_rtsp_port", 554)),
+            channel=str(cfg.get("camera_channel", "202")),
+            user=cfg.get("camera_user", "admin"),
+            password=cam_pass,
+            transport=cfg.get("camera_transport", "tcp"),
+        )
+    else:
+        src = MjpegSource(args.listen_fd, args.listen_port)
 
     # --- loop state ---
     frame_times: list[float] = []
@@ -454,9 +644,9 @@ def main() -> int:
                     f"network input {net_desc}")
             last_ctrl = seq
 
-        jpeg_in = src.read_frame()
+        img_in = src.read_image()
 
-        if jpeg_in is None:
+        if img_in is None:
             # No signal. Keep publishing a placeholder at 1 Hz so the dashboard
             # and the MJPEG stream stay alive instead of freezing on the last
             # good image. These frames are flagged synthetic, so the C
@@ -494,9 +684,9 @@ def main() -> int:
         ts_wall = time.time()
         ts_mono = now
 
-        img = cv2.imdecode(np.frombuffer(jpeg_in, np.uint8), cv2.IMREAD_COLOR)
-        if img is None:
-            continue
+        # Already decoded by the source: MjpegSource does the imdecode, the
+        # RTSP source never has a JPEG to begin with.
+        img = img_in
 
         if img.shape[1] != target_width:
             scale = target_width / img.shape[1]

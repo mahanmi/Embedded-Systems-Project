@@ -34,7 +34,7 @@ echo "1. source tree contains no hard-coded credentials"
 
 # Assignments of a literal to a credential-shaped name. Deliberately excludes
 # getenv() lookups, the .example template, and this script itself.
-PATTERN='(smtp_pass|smtp_password|mqtt_pass|mqtt_password|api_token|api_key|passwd|password|secret|token)[[:space:]]*[=:][[:space:]]*["'"'"'][^"'"'"']{4,}'
+PATTERN='(smtp_pass|smtp_password|mqtt_pass|mqtt_password|cam_pass|camera_pass|camera_password|api_token|api_key|passwd|password|secret|token)[[:space:]]*[=:][[:space:]]*["'"'"'][^"'"'"']{4,}'
 
 HITS=$(grep -rInE "$PATTERN" "$ROOT" \
         --include='*.c' --include='*.h' --include='*.py' \
@@ -52,6 +52,28 @@ if [ -z "$HITS" ]; then
 else
     fail "possible hard-coded credentials:"
     echo "$HITS" | sed 's/^/        /'
+fi
+
+# Credentials embedded in a URL -- rtsp://user:password@host and friends.
+# The pattern above cannot see these: there is no `password =` to match, the
+# secret is just a substring of what looks like an address. The RTSP camera
+# source made this a live risk, since its URL is only usable WITH the password
+# in it, so the URL itself has to be treated as a credential.
+URLHITS=$(grep -rInE '(rtsp|rtsps|http|https|mqtt)://[A-Za-z0-9._%-]+:[^@/[:space:]"'"'"']+@' "$ROOT" \
+        --include='*.c' --include='*.h' --include='*.py' \
+        --include='*.sh' --include='*.conf' --include='*.service' \
+        --include='*.socket' --include='*.html' --include='*.md' \
+        2>/dev/null \
+     | grep -vE 'check_secrets\.sh' \
+     | grep -vE ':\*\*\*@' \
+     | grep -vE '\{|\$|%s|password|PASS|<|\.\.\.' \
+     || true)
+
+if [ -z "$URLHITS" ]; then
+    pass "no credentials embedded in rtsp:// or http:// URLs"
+else
+    fail "credential embedded in a URL:"
+    echo "$URLHITS" | sed 's/^/        /'
 fi
 
 # The C code must reach every secret through getenv().

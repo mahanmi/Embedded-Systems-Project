@@ -46,6 +46,17 @@ Environment=OPENCV_NUM_THREADS=3
 Environment=OMP_NUM_THREADS=3
 Environment=PYTHONUNBUFFERED=1
 
+# Needed for camera_source=rtsp: GUARDIAN_CAM_PASS is the camera account's
+# password, and it is deliberately absent from guardian.conf because the RTSP
+# URL embeds it, making the URL itself a credential. Same root:guardian 0640
+# file the C daemon already uses.
+#
+# `-` prefix: the unit still starts when the file is missing, which keeps the
+# socket/webcam path working on a board that has no camera credentials at all.
+# When camera_source=rtsp the detector checks for the variable itself and exits
+# with a clear message rather than starting blind.
+EnvironmentFile=-/etc/guardian/secrets.env
+
 # --- sandboxing ---
 NoNewPrivileges=true
 PrivateTmp=true
