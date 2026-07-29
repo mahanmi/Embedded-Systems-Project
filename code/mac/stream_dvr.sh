@@ -70,6 +70,45 @@ done
 
 command -v ffmpeg >/dev/null || { echo "ffmpeg is not installed" >&2; exit 1; }
 
+# --- single instance ---------------------------------------------------------
+# Two copies of this script are worse than useless: both the DVR channel and the
+# board's ingest socket (Backlog=1, single consumer) hold one client each, so the
+# loser gets an RTSP session with no H.265 parameter sets and every frame fails
+# to build its Reference Picture Set. That surfaces as an endless wall of
+# "Could not find ref with POC N" / "Error constructing the frame RPS", which
+# looks like a broken camera or a codec bug and says nothing about the real
+# cause. It cost a debugging session to work out, so it fails loudly here now.
+#
+# A PID file rather than flock(1), which macOS does not ship. `kill -0` probes
+# liveness so a stale file left by a killed process cannot block a fresh start.
+LOCKFILE=${TMPDIR:-/tmp}/guardian-stream-dvr.pid
+if [ -f "$LOCKFILE" ]; then
+    OTHER=$(cat "$LOCKFILE" 2>/dev/null || echo "")
+    if [ -n "$OTHER" ] && kill -0 "$OTHER" 2>/dev/null; then
+        cat >&2 <<EOF
+[dvr] another copy of this script is already running as PID $OTHER.
+
+Running two would starve both of them. Stop the other one first:
+
+    kill $OTHER
+
+or, if you want to take over regardless:
+
+    pkill -f stream_dvr.sh && pkill -f 'ffmpeg.*Streaming/Channels'
+EOF
+        exit 1
+    fi
+    echo "[dvr] clearing a stale lock from dead PID ${OTHER:-unknown}"
+fi
+echo $$ >"$LOCKFILE"
+# Remove the lock on any exit, and take the ffmpeg child down with us -- an
+# orphaned ffmpeg would keep holding the DVR channel with nothing supervising it.
+cleanup() {
+    rm -f "$LOCKFILE" "${ERRLOG:-}"
+    [ -n "${FFPID:-}" ] && kill "$FFPID" 2>/dev/null
+}
+trap cleanup EXIT
+
 # --- credentials -------------------------------------------------------------
 SECRETS=$HERE/.secrets/camera.env
 if [ ! -f "$SECRETS" ]; then
@@ -128,6 +167,25 @@ if ! nc -z -G 3 "$HOST" "$PORT" 2>/dev/null; then
     echo "[dvr]          is only bound in socket mode. Retrying anyway." >&2
 fi
 
+# Something else may already be feeding the board -- the RTSP path from the board
+# itself, or a copy of this script running on another machine, neither of which
+# the PID file above can see. Only ESTAB counts: this script's own previous runs
+# leave connections in CLOSE-WAIT for a while, and treating those as a live
+# competitor would refuse to start after every normal restart.
+PEER=$(ssh -o BatchMode=yes -o ConnectTimeout=6 "mahan@$HOST" \
+        "ss -tn state established '( sport = :$PORT )' 2>/dev/null | tail -n +2" 2>/dev/null)
+if [ -n "$PEER" ]; then
+    echo >&2
+    echo "[dvr] the board's ingest port already has a live feed:" >&2
+    printf '        %s\n' "$PEER" >&2
+    echo "[dvr] Two producers would starve each other. Stop the other one, or if" >&2
+    echo "[dvr] that is the board's own RTSP path, it is already getting video." >&2
+    exit 1
+fi
+
+echo "[dvr] note    : the main stream has a long keyframe interval, so the first"
+echo "[dvr]           20-30 s produce decoder warnings while the reference chain"
+echo "[dvr]           syncs. They are suppressed and counted -- not a fault."
 echo "[dvr] press Ctrl-C to stop"
 ERRLOG=$(mktemp -t guardian-dvr) || exit 1
 trap 'rm -f "$ERRLOG"' EXIT
@@ -159,7 +217,47 @@ while true; do
         -i "$URL" \
         -vf "fps=$FPS,scale=${SIZE/x/:}:flags=bicubic,format=yuvj420p" \
         -c:v mjpeg -q:v "$QUALITY" -f mjpeg \
-        "tcp://$HOST:$PORT" 2>&1 | tee "$ERRLOG"
+        "tcp://$HOST:$PORT" 2>&1 | {
+            # Joining an H.265 stream mid-GOP always errors until the first
+            # keyframe arrives: the decoder has no parameter sets yet, so it
+            # cannot resolve references. Once a keyframe lands the errors stop
+            # completely -- measured 0.00/s over 60 s of steady state.
+            #
+            # The window is 45 s because this DVR's main stream has a long
+            # keyframe interval: measured joins took 25-30 s and produced ~500
+            # warnings. (The DVR does not report keyFrameInterval over ISAPI, so
+            # this is empirical.) An earlier 8 s window expired mid-join and let
+            # the tail through, which looked exactly like the failure it was
+            # meant to hide.
+            #
+            # Filtered by wall clock, and only for the specific decoder messages
+            # known to be join artefacts -- anything else passes through at once,
+            # so a real fault still reaches the user immediately. Lowering
+            # -loglevel for the whole run would have hidden genuine errors too.
+            QUIET_UNTIL=$(( $(date +%s) + 45 ))
+            suppressed=0
+            while IFS= read -r line; do
+                case "$line" in
+                    *"Could not find ref with POC"*|*"Error constructing the frame RPS"*|\
+                    *"Skipping invalid undecodable NALU"*|*"PPS id out of range"*|\
+                    *"Last message repeated"*)
+                        if [ "$(date +%s)" -lt "$QUIET_UNTIL" ]; then
+                            suppressed=$((suppressed + 1))
+                            printf '%s\n' "$line" >>"$ERRLOG"
+                            continue
+                        fi
+                        ;;
+                esac
+                if [ "$suppressed" -gt 0 ]; then
+                    echo "[dvr] (suppressed $suppressed decoder warnings while the" \
+                         "stream reached its first keyframe -- this is normal)"
+                    suppressed=0
+                fi
+                printf '%s\n' "$line" | tee -a "$ERRLOG"
+            done
+            [ "$suppressed" -gt 0 ] && echo "[dvr] (suppressed $suppressed decoder" \
+                "warnings during stream join -- normal)"
+        }
 
     rc=${PIPESTATUS[0]}
     [ "$rc" = 0 ] && { echo "[dvr] ffmpeg finished cleanly"; exit 0; }

@@ -13,6 +13,32 @@ Before starting any of them, make sure the capture feed is up:
 cd code/mac && ./stream_webcam.sh
 ```
 
+## Two things that must be running, and die on logout
+
+Neither of these is a managed service, so **both stop when you log out or reboot
+and nothing brings them back**. If the dashboard looks dead or the MQTT panel
+says offline, check these first — the board itself is almost certainly fine.
+
+| what | symptom when missing | restart |
+|---|---|---|
+| the capture streamer | dashboard shows "no signal"; after 30 s the watchdog starts emailing "camera tampering" | `cd code/mac && ./stream_dvr.sh` (DVR) or `./stream_webcam.sh` (laptop camera) |
+| mosquitto broker | dashboard "MQTT broker: offline"; board retries every 25 s forever | `/opt/homebrew/opt/mosquitto/sbin/mosquitto -c /opt/homebrew/etc/mosquitto/mosquitto.conf -d` |
+
+Quick check of both:
+
+```bash
+pgrep -f 'stream_dvr|stream_webcam' >/dev/null && echo "streamer UP" || echo "streamer DOWN"; pgrep -f 'sbin/mosquitto' >/dev/null && echo "broker UP" || echo "broker DOWN"
+```
+
+To make them survive reboots, the broker can be handed to launchd with
+`brew services start mosquitto`. That installs a login agent, so it is a change
+to your machine rather than to this project — do it deliberately, not by accident.
+
+**Only ever run one copy of the streamer.** A second one competes for the DVR
+channel and for the board's ingest socket, and the loser produces hundreds of
+H.265 reference-frame errors that look like a broken camera. The script now
+refuses to start a second copy and names the PID of the one already running.
+
 ---
 
 ## 1-1 — boot time (`systemd-analyze blame`)
