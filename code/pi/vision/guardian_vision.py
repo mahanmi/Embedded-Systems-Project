@@ -473,11 +473,33 @@ def main() -> int:
     target_width = int(cfg.get("target_width", 640))
     net_input = int(cfg.get("target_net_input", DEFAULT_NET_INPUT))
 
-    # Measured on this board: two threads is the optimum. More threads add TBB
-    # scheduling overhead without helping, because the convolutions are limited
-    # by memory bandwidth rather than by arithmetic throughput.
-    #   1 thread 2573 ms | 2 threads 1418 ms | 3 threads 1521 ms | 4 threads 1492 ms
-    cv2.setNumThreads(int(os.environ.get("GUARDIAN_CV_THREADS", "2")))
+    # Thread count for the DNN. Two used to be the optimum and no longer is.
+    #
+    # The original measurement was taken when inference ran INLINE in the frame
+    # loop, so every extra DNN thread competed with decoding, overlaying and
+    # publishing on the same four cores and the gains cancelled out:
+    #   1t 2573 ms | 2t 1418 ms | 3t 1521 ms | 4t 1492 ms
+    #
+    # Once inference moved to its own worker the picture inverted, because the
+    # frame path now spends most of its time waiting on I/O rather than
+    # competing. Re-measured on this board, same model, same image:
+    #   300 px:  1t 2491 | 2t 1551 | 3t 1212 | 4t 1088 ms
+    #   224 px:  1t 1411 | 2t  809 | 3t  693 | 4t  560 ms
+    #   160 px:  1t  752 | 2t  414 | 3t  346 | 4t  317 ms
+    #
+    # And yet the default here is still 2, because the microbenchmark above is
+    # measured in isolation and the board is not. Deploying 4 threads made the
+    # system WORSE: inference finishing sooner means more inferences per second,
+    # which raised sustained CPU enough to cross the thermal governor's setpoint.
+    # The governor then cut the frame rate to 2 fps and the capture width to
+    # 320 px, so the "30% faster" change produced a slower, uglier stream.
+    #
+    # The lesson is that on a thermally-limited board the useful quantity is
+    # work per degree, not milliseconds per inference. Left configurable: with
+    # decoding moved off the board (camera_source=socket + mac/stream_dvr.sh)
+    # there is now real headroom, so raising this is worth re-measuring -- but
+    # it must be judged on sustained temperature, not a benchmark loop.
+    cv2.setNumThreads(int(cfg.get("cv_threads", os.environ.get("GUARDIAN_CV_THREADS", "2"))))
 
     # --- model ---
     proto = os.path.join(args.model_dir, "MobileNetSSD_deploy.prototxt")
