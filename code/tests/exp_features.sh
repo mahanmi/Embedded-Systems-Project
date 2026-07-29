@@ -242,12 +242,41 @@ exp_4_3() {
     BEFORE_PID=$(pi 'systemctl show -p MainPID --value guardian-vision')
     note "guardian-vision MainPID before: $BEFORE_PID"
 
-    hdr "blocking inbound TCP 9000 for $(( STALE + 25 ))s"
-    pi 'sudo iptables -I INPUT -p tcp --dport 9000 -j DROP' >>"$LOG" 2>&1
-    # Existing connections survive a new rule, so the live one is torn down too.
-    pi 'sudo ss -K state established "( dport = :9000 or sport = :9000 )"' >>"$LOG" 2>&1
+    # Where the video comes from decides what "unplugging the camera" means.
+    # With camera_source=socket a capture host pushes into port 9000, so the cut
+    # is inbound 9000. With camera_source=rtsp the board reaches OUT to the DVR,
+    # and blocking 9000 would do exactly nothing -- the test would sit there for
+    # 55 s and report a watchdog that never fired, through no fault of its own.
+    local CAM_SOURCE RULE_ADD RULE_DEL KILL_CONN CUT_DESC
+    CAM_SOURCE=$(pi "sudo grep -E '^camera_source' /etc/guardian/guardian.conf | awk '{print \$3}'" 2>/dev/null)
+    CAM_SOURCE=${CAM_SOURCE:-socket}
+    note "camera_source = $CAM_SOURCE"
 
-    trap 'note "cleaning up the firewall rule"; pi "sudo iptables -D INPUT -p tcp --dport 9000 -j DROP" >/dev/null 2>&1; exit 130' INT TERM
+    if [ "$CAM_SOURCE" = rtsp ]; then
+        local CAM_HOST CAM_PORT
+        CAM_HOST=$(pi "sudo grep -E '^camera_host' /etc/guardian/guardian.conf | awk '{print \$3}'")
+        CAM_PORT=$(pi "sudo grep -E '^camera_rtsp_port' /etc/guardian/guardian.conf | awk '{print \$3}'")
+        CAM_PORT=${CAM_PORT:-554}
+        RULE_ADD="sudo iptables -I OUTPUT -p tcp -d $CAM_HOST --dport $CAM_PORT -j REJECT"
+        RULE_DEL="sudo iptables -D OUTPUT -p tcp -d $CAM_HOST --dport $CAM_PORT -j REJECT"
+        KILL_CONN="sudo ss -K state established \"( dport = :$CAM_PORT )\" 2>/dev/null || true"
+        CUT_DESC="outbound TCP $CAM_PORT to the DVR at $CAM_HOST"
+        # REJECT rather than DROP: the board is the client here, and a rejected
+        # connect fails immediately instead of hanging for the TCP timeout, so
+        # the reconnect loop reports the fault promptly rather than looking hung.
+    else
+        RULE_ADD='sudo iptables -I INPUT -p tcp --dport 9000 -j DROP'
+        RULE_DEL='sudo iptables -D INPUT -p tcp --dport 9000 -j DROP'
+        KILL_CONN='sudo ss -K state established "( dport = :9000 or sport = :9000 )" 2>/dev/null || true'
+        CUT_DESC="inbound TCP 9000 from the capture host"
+    fi
+
+    hdr "cutting $CUT_DESC for $(( STALE + 25 ))s"
+    pi "$RULE_ADD" >>"$LOG" 2>&1
+    # Existing connections survive a new rule, so the live one is torn down too.
+    pi "$KILL_CONN" >>"$LOG" 2>&1
+
+    trap 'note "cleaning up the firewall rule"; pi "$RULE_DEL" >/dev/null 2>&1; exit 130' INT TERM
 
     sleep $(( STALE + 25 ))
 
@@ -263,12 +292,12 @@ exp_4_3() {
     fi
 
     hdr "restoring the capture link"
-    pi 'sudo iptables -D INPUT -p tcp --dport 9000 -j DROP' >>"$LOG" 2>&1
+    pi "$RULE_DEL" >>"$LOG" 2>&1
     trap - INT TERM
 
     if wait_until 120 "frames to resume" \
             pi 'curl -sk --max-time 4 https://127.0.0.1/api/v1/persons | grep -q "\"available\":true"'; then
-        ok "the laptop reconnected by itself and frames resumed"
+        ok "the capture link re-established itself and frames resumed"
     fi
 
     local AFTER_PID

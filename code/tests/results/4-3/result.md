@@ -1,6 +1,6 @@
 # Experiment 4-3 -- software watchdog
 
-Run: 2026-07-27T07:46:17Z. `watchdog_stale_sec = 30`.
+Run: 2026-07-29T10:10:47Z. `watchdog_stale_sec = 30`.
 
 The capture link was cut by dropping inbound TCP 9000 on the board and tearing
 down the established connection, which models a camera or cable failure more
@@ -9,9 +9,9 @@ recovers on its own the moment the rule is lifted.
 
 | | |
 |---|---|
-| detector PID before | 34951 |
-| detector PID after | 35679 |
-| tampering email | 11:15:32.533 mailer: "[Guardian 402170516] CAMERA TAMPERING suspected" delivered in 2.8s |
+| detector PID before | 3339 |
+| detector PID after | 3745 |
+| tampering email | 13:39:54.560 mailer: "[Guardian 402170516] CAMERA TAMPERING suspected" delivered in 2.3s |
 | main daemon during the fault | active |
 
 Recovery is measured by the detector's PID changing, not by systemd's
