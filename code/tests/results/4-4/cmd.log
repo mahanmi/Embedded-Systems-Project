@@ -1,0 +1,13 @@
+load generator: stress-ng --cpu 4 --timeout 300s
+
+=== governor activity ===
+
+=== phase B governor activity ===
+11:53:14.742 thermal    : throttle above 66.8 C, recover below 62.8 C
+11:53:14.744 sysinfo: 4 cores, thermal zone reads 63.9 C
+11:53:54.982 thermal: level 1 (step 1) at 67.1 C -> 5 fps, 480 px capture, 256 px network
+11:53:59.801 mailer: "[Guardian 402170516] thermal throttling at 67.1 C" delivered in 4.8s
+11:54:15.045 mailer: '[Guardian 402170516] thermal throttling at 67.1 C' suppressed (same kind sent 20s ago)
+11:54:15.045 thermal: level 2 (step 2) at 67.1 C -> 3 fps, 320 px capture, 224 px network
+11:54:30.093 mailer: '[Guardian 402170516] thermal throttling at 67.1 C' suppressed (same kind sent 35s ago)
+11:54:30.094 thermal: level 3 (step 3) at 67.1 C -> 2 fps, 320 px capture, 192 px network

@@ -1,0 +1,11 @@
+Netid Recv-Q Send-Q  Local Address:Port   Peer Address:Port Process
+tcp   0      0      192.168.100.26:9000 192.168.100.27:57511       
+
+=== watchdog activity ===
+Jul 27 11:13:24 mahan guardian[33043]: 11:13:24.632 watchdog: frames resumed after 1 restart(s)
+Jul 27 11:15:29 mahan guardian[33043]: 11:15:29.753 vision pipeline STALE
+Jul 27 11:15:29 mahan guardian[33043]: 11:15:29.753 watchdog: no real frame for 34 s -- restarting the detector
+Jul 27 11:15:32 mahan guardian[33043]: 11:15:32.533 mailer: "[Guardian 402170516] CAMERA TAMPERING suspected" delivered in 2.8s
+
+=== tampering alert ===
+11:15:32.533 mailer: "[Guardian 402170516] CAMERA TAMPERING suspected" delivered in 2.8s

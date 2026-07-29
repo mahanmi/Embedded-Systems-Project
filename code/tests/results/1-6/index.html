@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- The brief requires the student name and number in the page title. -->
+<title>Mahan Majlesi &mdash; 402170516 | Smart Guardian System</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --line:#30363d; --txt:#e6edf3;
+    --dim:#8b949e; --accent:#3fb950; --warn:#d29922; --crit:#f85149;
+    --blue:#58a6ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+       font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  header{padding:18px 24px;border-bottom:1px solid var(--line);
+         display:flex;flex-wrap:wrap;gap:16px;align-items:baseline;
+         justify-content:space-between;background:var(--panel)}
+  h1{margin:0;font-size:20px;font-weight:600}
+  .sid{color:var(--blue);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .sub{color:var(--dim);font-size:13px}
+  main{padding:24px;max-width:1180px;margin:0 auto}
+  .grid{display:grid;gap:18px;grid-template-columns:minmax(320px,2fr) minmax(280px,1fr)}
+  @media(max-width:860px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+        padding:16px}
+  .card h2{margin:0 0 12px;font-size:13px;text-transform:uppercase;
+           letter-spacing:.08em;color:var(--dim);font-weight:600}
+  #stream{width:100%;border-radius:8px;background:#000;display:block;
+          aspect-ratio:4/3;object-fit:contain}
+  .stats{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
+  .stat{background:#0d1117;border:1px solid var(--line);border-radius:8px;padding:12px}
+  .stat .k{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+  .stat .v{font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;
+           margin-top:4px}
+  .stat .u{font-size:13px;color:var(--dim);font-weight:400}
+  .bar{height:5px;background:#21262d;border-radius:3px;margin-top:8px;overflow:hidden}
+  .bar>i{display:block;height:100%;background:var(--accent);width:0;
+         transition:width .4s ease,background .4s ease}
+  .people{font-size:46px;font-weight:700;color:var(--accent);line-height:1}
+  .people.zero{color:var(--dim)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+  th{color:var(--dim);font-weight:500;font-size:11px;text-transform:uppercase}
+  td.num{font-variant-numeric:tabular-nums}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .switch{position:relative;display:inline-block;width:52px;height:28px;flex:none}
+  .switch input{opacity:0;width:0;height:0}
+  .slider{position:absolute;inset:0;background:#30363d;border-radius:28px;
+          cursor:pointer;transition:.25s}
+  .slider:before{content:"";position:absolute;height:22px;width:22px;left:3px;
+                 bottom:3px;background:#fff;border-radius:50%;transition:.25s}
+  input:checked+.slider{background:var(--crit)}
+  input:checked+.slider:before{transform:translateX(24px)}
+  .pill{display:inline-block;padding:2px 9px;border-radius:11px;font-size:11px;
+        font-weight:600;letter-spacing:.03em}
+  .ok{background:rgba(63,185,80,.15);color:var(--accent)}
+  .bad{background:rgba(248,81,73,.15);color:var(--crit)}
+  .mid{background:rgba(210,153,34,.15);color:var(--warn)}
+  footer{padding:18px 24px;color:var(--dim);font-size:12px;text-align:center;
+         border-top:1px solid var(--line);margin-top:24px}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+  a{color:var(--blue)}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Smart Guardian System</h1>
+    <div class="sub">Mahan Majlesi &mdash; <span class="sid">402170516</span>
+      &middot; Embedded Systems final project</div>
+  </div>
+  <div class="sub">
+    <span id="clock">--:--:--</span> &middot;
+    <span id="linkstate" class="pill mid">connecting</span>
+  </div>
+</header>
+
+<main>
+<div class="grid">
+
+  <div class="card">
+    <h2>Live stream &mdash; /api/v1/stream</h2>
+    <img id="stream" src="/api/v1/stream" alt="live MJPEG stream">
+    <div class="sub" style="margin-top:10px" id="streaminfo">&nbsp;</div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:18px">
+
+    <div class="card">
+      <h2>People detected now</h2>
+      <div class="row">
+        <div><span class="people zero" id="persons">--</span>
+             <span class="u" id="personsuffix">person</span></div>
+        <div style="text-align:right" class="sub">
+          <div>FPS <b id="fps">--</b></div>
+          <div>infer <b id="infer">--</b> ms</div>
+        </div>
+      </div>
+      <div class="sub" style="margin-top:8px">
+        last frame <span id="frameage">--</span> ago
+      </div>
+    </div>
+
+    <!-- part 4-1: anti-theft mode, toggled from the page and over the API -->
+    <div class="card">
+      <h2>Anti-theft (guard) mode</h2>
+      <div class="row">
+        <div>
+          <div><b id="guardlabel">disarmed</b></div>
+          <div class="sub">Immediate email + <code>alarm/402170516/home</code></div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="guard"><span class="slider"></span>
+        </label>
+      </div>
+      <div class="sub" id="guardmsg" style="margin-top:8px">&nbsp;</div>
+    </div>
+
+    <div class="card">
+      <h2>System health</h2>
+      <table>
+        <tr><td>MQTT broker</td><td style="text-align:right">
+            <span id="mqtt" class="pill mid">?</span></td></tr>
+        <tr><td>Vision pipeline</td><td style="text-align:right">
+            <span id="vision" class="pill mid">?</span></td></tr>
+        <tr><td>Thermal governor</td><td style="text-align:right">
+            <span id="therm" class="pill ok">normal</span></td></tr>
+        <tr><td>Daemon RSS</td><td style="text-align:right" class="num">
+            <span id="rss">--</span> MB</td></tr>
+        <tr><td>Uptime</td><td style="text-align:right" class="num">
+            <span id="uptime">--</span></td></tr>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="margin-top:18px">
+  <h2>Telemetry &mdash; refreshed every 2 s from /api/v1/telemetry</h2>
+  <div class="stats">
+    <div class="stat"><div class="k">CPU temperature</div>
+      <div class="v"><span id="temp">--</span><span class="u"> &deg;C</span></div>
+      <div class="bar"><i id="tempbar"></i></div></div>
+    <div class="stat"><div class="k">CPU load</div>
+      <div class="v"><span id="cpu">--</span><span class="u"> %</span></div>
+      <div class="bar"><i id="cpubar"></i></div></div>
+    <div class="stat"><div class="k">Free memory</div>
+      <div class="v"><span id="memfree">--</span><span class="u"> MB</span></div>
+      <div class="bar"><i id="membar"></i></div></div>
+    <div class="stat"><div class="k">CPU frequency</div>
+      <div class="v"><span id="freq">--</span><span class="u"> MHz</span></div></div>
+    <div class="stat"><div class="k">Load average</div>
+      <div class="v"><span id="load">--</span></div></div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:18px">
+  <h2>Detection history &mdash; /api/v1/history (black box, part 4-2)</h2>
+  <table>
+    <thead><tr><th>#</th><th>Time (UTC)</th><th>People</th><th>CPU &deg;C</th>
+      <th>FPS</th><th>Guard</th><th>Mailed</th></tr></thead>
+    <tbody id="history"><tr><td colspan="7" class="sub">loading&hellip;</td></tr></tbody>
+  </table>
+</div>
+
+<footer>
+  Raspberry Pi 3B+ &middot; C daemon (libmicrohttpd + GnuTLS, libmosquitto,
+  libcurl, SQLite) &middot; OpenCV MobileNet-SSD detector<br>
+  API documentation: <a href="https://192.168.100.26:8443/docs">Swagger UI</a> &middot;
+  served over HTTPS with a self-signed certificate, CN = 402170516
+</footer>
+</main>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+
+function fmtDur(s){
+  s = Math.max(0, Math.floor(s));
+  const d = Math.floor(s/86400), h = Math.floor(s%86400/3600),
+        m = Math.floor(s%3600/60);
+  if (d) return d+"d "+h+"h";
+  if (h) return h+"h "+m+"m";
+  return m+"m "+(s%60)+"s";
+}
+function setPill(el, ok, textOk, textBad, mid){
+  el.className = "pill " + (mid ? "mid" : ok ? "ok" : "bad");
+  el.textContent = mid ? mid : (ok ? textOk : textBad);
+}
+function bar(el, pct, warn, crit){
+  pct = Math.max(0, Math.min(100, pct));
+  el.style.width = pct + "%";
+  el.style.background = pct >= crit ? "var(--crit)"
+                      : pct >= warn ? "var(--warn)" : "var(--accent)";
+}
+
+let failures = 0;
+function online(ok){
+  failures = ok ? 0 : failures + 1;
+  setPill($("linkstate"), ok, "live", "no response",
+          failures > 0 && failures < 3 ? "retrying" : null);
+}
+
+async function tick(){
+  try {
+    const [tRes, pRes] = await Promise.all([
+      fetch("/api/v1/telemetry", {cache:"no-store"}),
+      fetch("/api/v1/persons",   {cache:"no-store"})
+    ]);
+    const t = await tRes.json();
+
+    $("temp").textContent = t.cpu_temp_c.toFixed(1);
+    bar($("tempbar"), (t.cpu_temp_c/85)*100, 70, 82);
+    $("cpu").textContent = t.cpu_percent.toFixed(1);
+    bar($("cpubar"), t.cpu_percent, 70, 90);
+    $("memfree").textContent = (t.mem_available_kb/1024).toFixed(0);
+    bar($("membar"), t.mem_used_percent, 75, 90);
+    $("freq").textContent = (t.cpu_freq_khz/1000).toFixed(0);
+    $("load").textContent = t.load1.toFixed(2);
+    $("rss").textContent = (t.daemon_rss_kb/1024).toFixed(1);
+    $("uptime").textContent = fmtDur(t.uptime_sec);
+
+    setPill($("mqtt"), t.mqtt_connected, "connected", "offline");
+    const lvls = ["normal","step 1","step 2","step 3"];
+    const th = $("therm");
+    th.textContent = lvls[t.thermal_level] || "?";
+    th.className = "pill " + (t.thermal_level === 0 ? "ok" : "mid");
+
+    // Guard switch is authoritative from the server, but do not fight the
+    // user while their click is still in flight.
+    if (!$("guard").dataset.busy) {
+      $("guard").checked = t.guard_mode;
+      $("guardlabel").textContent = t.guard_mode ? "ARMED" : "disarmed";
+    }
+
+    if (pRes.ok) {
+      const p = await pRes.json();
+      const n = p.persons;
+      $("persons").textContent = n;
+      $("persons").className = "people" + (n ? "" : " zero");
+      $("personsuffix").textContent = n === 1 ? "person" : "people";
+      $("fps").textContent = p.fps.toFixed(1);
+      $("infer").textContent = p.inference_ms.toFixed(0);
+      $("frameage").textContent = p.frame_age_sec.toFixed(1) + " s";
+      $("streaminfo").textContent =
+        p.resolution + " · " + p.fps.toFixed(1) + " fps · " +
+        "inference " + p.inference_ms.toFixed(0) + " ms";
+      setPill($("vision"), p.frame_age_sec < 30, "healthy", "stale");
+    } else {
+      $("persons").textContent = "--";
+      setPill($("vision"), false, "", "no frames");
+    }
+    online(true);
+  } catch (e) {
+    online(false);
+  }
+}
+
+async function loadHistory(){
+  try {
+    const r = await fetch("/api/v1/history?limit=5", {cache:"no-store"});
+    const j = await r.json();
+    const tb = $("history");
+    if (!j.records.length){
+      tb.innerHTML = '<tr><td colspan="7" class="sub">no detections recorded yet</td></tr>';
+      return;
+    }
+    tb.innerHTML = j.records.map(r =>
+      "<tr><td class='num'>" + r.id + "</td>" +
+      "<td class='num'>" + r.timestamp.replace("T"," ").replace("Z","") + "</td>" +
+      "<td class='num'>" + r.persons + "</td>" +
+      "<td class='num'>" + r.cpu_temp_c.toFixed(1) + "</td>" +
+      "<td class='num'>" + r.fps.toFixed(1) + "</td>" +
+      "<td>" + (r.guard_mode ? "yes" : "-") + "</td>" +
+      "<td>" + (r.emailed ? "yes" : "-") + "</td></tr>").join("");
+  } catch (e) { /* leave the previous table in place */ }
+}
+
+$("guard").addEventListener("change", async ev => {
+  const on = ev.target.checked;
+  ev.target.dataset.busy = "1";
+  $("guardmsg").textContent = on ? "arming…" : "disarming…";
+  try {
+    const r = await fetch("/api/v1/guard", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({enabled:on})
+    });
+    const j = await r.json();
+    $("guardlabel").textContent = j.enabled ? "ARMED" : "disarmed";
+    $("guardmsg").textContent = j.enabled
+      ? "Armed — every detection triggers an immediate email and an MQTT alarm."
+      : "Disarmed — detections use the 30 s email debounce.";
+  } catch (e) {
+    $("guardmsg").textContent = "request failed";
+    ev.target.checked = !on;
+  } finally {
+    delete ev.target.dataset.busy;
+  }
+});
+
+// The stream is a never-ending multipart response; if it dies (detector
+// restart, watchdog action) the <img> fires onerror and we re-attach.
+$("stream").addEventListener("error", () => {
+  setTimeout(() => { $("stream").src = "/api/v1/stream?r=" + Date.now(); }, 2000);
+});
+
+setInterval(() => { $("clock").textContent = new Date().toLocaleTimeString(); }, 1000);
+setInterval(tick, 2000);          // the brief: refresh every 2 seconds
+setInterval(loadHistory, 10000);
+tick(); loadHistory();
+</script>
+</body>
+</html>

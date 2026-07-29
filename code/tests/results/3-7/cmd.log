@@ -1,0 +1,48 @@
+
+=== password login as mahan ===
+$ ssh -o PubkeyAuthentication=no -o PreferredAuthentications=password,keyboard-interactive -o StrictHostKeyChecking=no -o ConnectTimeout=10 mahan@192.168.100.26 true
+mahan@192.168.100.26: Permission denied (publickey).
+[exit 255]
+
+=== root login ===
+$ ssh -o BatchMode=yes -o ConnectTimeout=10 root@192.168.100.26 true
+root@192.168.100.26: Permission denied (publickey).
+[exit 255]
+
+=== unknown account 'intruder' ===
+$ ssh -o PubkeyAuthentication=no -o PreferredAuthentications=password,keyboard-interactive -o StrictHostKeyChecking=no -o ConnectTimeout=10 intruder@192.168.100.26 true
+intruder@192.168.100.26: Permission denied (publickey).
+[exit 255]
+
+=== sshd side of the same events ===
+Jul 27 07:51:22 mahan sshd[20986]: Accepted publickey for mahan from 192.168.100.27 port 60937 ssh2: RSA SHA256:gj+bBXgWInagSZ4tezT7QhTOHpQ2a+otN3uEvIb9Q6E
+Jul 27 07:51:22 mahan sshd[20986]: pam_unix(sshd:session): session opened for user mahan(uid=1000) by mahan(uid=0)
+Jul 27 07:51:31 mahan sshd[21051]: Connection closed by authenticating user mahan 192.168.100.27 port 61045 [preauth]
+Jul 27 07:51:31 mahan sshd[21053]: User root from 192.168.100.27 not allowed because not listed in AllowUsers
+Jul 27 07:51:31 mahan sshd[21053]: Connection closed by invalid user root 192.168.100.27 port 61046 [preauth]
+Jul 27 07:51:31 mahan sshd[21055]: Invalid user intruder from 192.168.100.27 port 61051
+Jul 27 07:51:31 mahan sshd[21055]: Connection closed by invalid user intruder 192.168.100.27 port 61051 [preauth]
+Jul 27 07:51:32 mahan sshd[21057]: Accepted publickey for mahan from 192.168.100.27 port 61058 ssh2: RSA SHA256:gj+bBXgWInagSZ4tezT7QhTOHpQ2a+otN3uEvIb9Q6E
+Jul 27 07:51:32 mahan sshd[21057]: pam_unix(sshd:session): session opened for user mahan(uid=1000) by mahan(uid=0)
+Jul 27 07:51:35 mahan sshd[21107]: Accepted publickey for mahan from 192.168.100.27 port 61091 ssh2: RSA SHA256:gj+bBXgWInagSZ4tezT7QhTOHpQ2a+otN3uEvIb9Q6E
+Jul 27 07:51:35 mahan sshd[21107]: pam_unix(sshd:session): session opened for user mahan(uid=1000) by mahan(uid=0)
+Jul 27 07:51:38 mahan sshd[21160]: Accepted publickey for mahan from 192.168.100.27 port 61126 ssh2: RSA SHA256:gj+bBXgWInagSZ4tezT7QhTOHpQ2a+otN3uEvIb9Q6E
+Jul 27 07:51:38 mahan sshd[21160]: pam_unix(sshd:session): session opened for user mahan(uid=1000) by mahan(uid=0)
+Jul 27 07:52:34 mahan sshd[21216]: Accepted publickey for mahan from 192.168.100.27 port 61807 ssh2: RSA SHA256:gj+bBXgWInagSZ4tezT7QhTOHpQ2a+otN3uEvIb9Q6E
+Jul 27 07:52:34 mahan sshd[21216]: pam_unix(sshd:session): session opened for user mahan(uid=1000) by mahan(uid=0)
+Jul 27 07:52:43 mahan sshd[21281]: Connection closed by authenticating user mahan 192.168.100.27 port 61909 [preauth]
+Jul 27 07:52:43 mahan sshd[21283]: User root from 192.168.100.27 not allowed because not listed in AllowUsers
+Jul 27 07:52:43 mahan sshd[21283]: Connection closed by invalid user root 192.168.100.27 port 61910 [preauth]
+Jul 27 07:52:44 mahan sshd[21285]: Invalid user intruder from 192.168.100.27 port 61922
+Jul 27 07:52:44 mahan sshd[21285]: Connection closed by invalid user intruder 192.168.100.27 port 61922 [preauth]
+Jul 27 07:52:44 mahan sshd[21287]: Accepted publickey for mahan from 192.168.100.27 port 61923 ssh2: RSA SHA256:gj+bBXgWInagSZ4tezT7QhTOHpQ2a+otN3uEvIb9Q6E
+Jul 27 07:52:44 mahan sshd[21287]: pam_unix(sshd:session): session opened for user mahan(uid=1000) by mahan(uid=0)
+Jul 27 07:52:47 mahan sshd[21337]: Accepted publickey for mahan from 192.168.100.27 port 61962 ssh2: RSA SHA256:gj+bBXgWInagSZ4tezT7QhTOHpQ2a+otN3uEvIb9Q6E
+Jul 27 07:52:47 mahan sshd[21337]: pam_unix(sshd:session): session opened for user mahan(uid=1000) by mahan(uid=0)
+
+=== effective policy ===
+maxauthtries 3
+permitrootlogin no
+pubkeyauthentication yes
+passwordauthentication no
+allowusers mahan

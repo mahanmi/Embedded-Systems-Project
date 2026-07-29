@@ -1,0 +1,61 @@
+# =============================================================================
+#  Embedded Systems final project -- Mahan Majlesi (402170516)
+#
+#  Written BEFORE `git init`, deliberately. Once a secret is committed it lives
+#  in the history whether or not a later commit removes it, so the ignore rules
+#  have to exist before the first `git add`, not after it.
+# =============================================================================
+
+# --- credentials -------------------------------------------------------------
+# Live MQTT broker credentials used by the laptop-side scripts. The project's
+# whole security requirement is "no hard-coded secrets on the device"; letting
+# these into the history would defeat it in the most embarrassing way possible.
+code/mac/.secrets/
+*.secrets
+secrets.env
+!code/pi/config/secrets.env.example
+
+# Private keys and certificates. The certificate in code/tests/results/1-5/ is
+# deliberately NOT ignored: it is a self-signed public certificate captured as
+# evidence for experiment 1-5, and it carries no private key.
+*.key
+*.pem
+!code/tests/results/**/*.crt
+
+# --- build output ------------------------------------------------------------
+code/pi/build/
+code/pi/guardian
+*.o
+__pycache__/
+*.pyc
+
+# Model weights: 23 MB of Caffe binary, fetched by scripts/fetch_model.sh.
+# Reproducible from that script, so there is no reason to carry it in git.
+code/pi/models/
+
+# --- LaTeX ------------------------------------------------------------------
+# The report PDF is a deliverable but it is regenerated from source on every
+# build; committing it just produces a binary conflict on every edit.
+Tex/*.aux
+Tex/*.log
+Tex/*.out
+Tex/*.toc
+Tex/*.fls
+Tex/*.fdb_latexmk
+Tex/*.synctex.gz
+Tex/*.bbl
+Tex/*.blg
+Tex/Main.pdf
+Tex/**/*.aux
+
+# --- macOS ------------------------------------------------------------------
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# --- scratch ----------------------------------------------------------------
+*.tmp
+*.bak
+*.expbak
+*.thermbak

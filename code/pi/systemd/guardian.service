@@ -1,0 +1,104 @@
+# =============================================================================
+#  Main C daemon -- web server, REST API, MQTT, mail, black box, watchdog
+#
+#  ORDERING RATIONALE
+#  ------------------
+#  After=guardian-ingest.socket     -- ordering only, deliberately NOT Requires=.
+#      An earlier revision did use Requires= here, reasoning that the socket is
+#      the "camera is ready" milestone. That reintroduced, by a longer path,
+#      exactly the coupling the Wants= note below describes:
+#
+#          guardian-vision stops
+#            -> guardian-ingest.socket stops   (the socket is PartOf= it)
+#            -> guardian.service stops         (Requires= the socket)
+#
+#      so stopping the detector still tore down the web server, MQTT, mail and
+#      the black box -- and because Requires= propagates the stop but nothing
+#      pulls the daemon back up afterwards, the watchdog restarting the detector
+#      left the whole system dead. Observed exactly that during experiment 2-1.
+#
+#      The dependency was never real: this daemon has no code path that touches
+#      the ingest socket. The detector owns port 9000 and hands frames over
+#      through the shared memory segment instead. Ordering is all that is wanted.
+#
+#  Wants=guardian-vision.service    -- deliberately NOT Requires=. The first
+#      version of this file used Requires= and it was wrong: systemd propagates
+#      a restart of a Requires= dependency to the units that depend on it, so
+#      every time the software watchdog (part 4-3) restarted the detector it
+#      also tore down the web server, the MQTT client and every open MJPEG
+#      stream -- the exact opposite of what a watchdog is for. Wants= keeps the
+#      pull-in behaviour (starting this unit still starts the detector) without
+#      coupling their lifetimes. It also means the dashboard comes up and
+#      honestly reports "no signal" when the detector cannot start, instead of
+#      the whole system disappearing.
+#
+#  After=guardian-vision.service    -- ordering is still enforced, so at boot
+#      the detector is already attaching to the shared segment before the
+#      watchdog starts timing frame freshness. A 45 s start-up grace period in
+#      the C code covers the remainder while the Caffe model loads.
+#
+#  After=network-online.target      -- the MQTT client wants a routable address;
+#      it tolerates the broker being absent, but not the interface.
+#
+#  Type=notify: the daemon calls sd_notify(READY=1) only once the TLS listener,
+#  the database, the mail worker and the worker threads are all up. That makes
+#  `After=guardian.service` in the API unit mean "after it can actually serve",
+#  not merely "after fork".
+#
+#  Restart=always satisfies the brief's requirement that services come back by
+#  themselves after a crash -- experiment 1-2 kills this process with -9.
+# =============================================================================
+[Unit]
+Description=Guardian main daemon (HTTPS server, REST API, MQTT, mail, black box)
+Documentation=file:/opt/guardian/README
+Wants=guardian-vision.service network-online.target
+After=guardian-ingest.socket guardian-vision.service network-online.target time-sync.target
+# Restart forever; never let systemd disable the unit.
+StartLimitIntervalSec=0
+
+[Service]
+Type=notify
+NotifyAccess=main
+User=guardian
+Group=guardian
+
+# Credentials are injected here and nowhere else. The file is root:guardian
+# 0640, so it is unreadable to anyone but this service.
+EnvironmentFile=/etc/guardian/secrets.env
+
+ExecStart=/opt/guardian/bin/guardian -c /etc/guardian/guardian.conf
+ExecReload=/bin/kill -HUP $MAINPID
+
+Restart=always
+RestartSec=2
+TimeoutStartSec=60
+TimeoutStopSec=15
+WatchdogSec=0
+
+# Ports 80 and 443 are privileged, but the process must not be root. An
+# ambient capability grants exactly the one privilege needed.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+# --- sandboxing ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+ReadWritePaths=/var/lib/guardian /var/log/guardian /dev/shm
+# /sys and /proc stay readable: reading the thermal zone and meminfo directly
+# is the point of the exercise.
+ProtectProc=default
+
+MemoryMax=220M
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,72 @@
+subject=CN=402170516, O=Sharif University of Technology, OU=Department of Electrical Engineering, L=Tehran, C=IR
+
+issuer=CN=402170516, O=Sharif University of Technology, OU=Department of Electrical Engineering, L=Tehran, C=IR
+
+notBefore=Jul 27 01:48:07 2026 GMT
+notAfter=Oct 29 01:48:07 2028 GMT
+
+SAN: IP Address:192.168.100.26, IP Address:127.0.0.1, DNS:mahan, DNS:mahan.local, DNS:localhost
+
+=== full text ===
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number:
+            0f:c2:50:bc:8f:fa:61:5c:52:16:7d:c5:9d:8c:b3:b0:72:8e:70:7c
+        Signature Algorithm: sha256WithRSAEncryption
+        Issuer: CN=402170516, O=Sharif University of Technology, OU=Department of Electrical Engineering, L=Tehran, C=IR
+        Validity
+            Not Before: Jul 27 01:48:07 2026 GMT
+            Not After : Oct 29 01:48:07 2028 GMT
+        Subject: CN=402170516, O=Sharif University of Technology, OU=Department of Electrical Engineering, L=Tehran, C=IR
+        Subject Public Key Info:
+            Public Key Algorithm: rsaEncryption
+                Public-Key: (2048 bit)
+                Modulus:
+                    00:94:18:c8:03:f2:2b:d4:1d:e0:58:81:36:61:ca:
+                    c3:e6:75:c3:cd:2e:fd:ba:cb:7a:e5:63:2b:35:37:
+                    ac:4e:49:95:f1:13:1e:92:56:d2:17:52:6b:b1:79:
+                    3c:f3:1f:b3:a9:ce:68:74:7d:ea:42:51:a0:13:70:
+                    3f:4f:2f:69:6d:69:63:6b:b6:50:05:2d:22:db:f7:
+                    89:8b:2b:79:20:85:9a:29:c0:72:6e:9f:c7:47:d9:
+                    9a:fb:69:60:b1:bb:70:7c:1a:84:20:d6:6d:82:e3:
+                    a2:c9:a2:4d:12:97:06:8a:36:6c:1e:eb:ad:2c:4f:
+                    e1:4f:95:ef:18:92:33:fc:bf:9d:e4:44:20:03:86:
+                    3c:31:8e:bc:8e:5f:a2:c4:b5:41:f2:a7:58:1d:37:
+                    1d:6c:92:c8:9f:fa:08:38:e6:1b:86:08:02:d9:43:
+                    a9:15:80:f2:cd:64:7f:09:21:d3:9f:27:0d:9b:55:
+                    ad:b6:ea:56:0e:22:a3:70:0b:89:73:f8:b5:cb:f3:
+                    8e:65:a0:82:b0:6e:28:ac:2f:33:6a:9a:c7:89:71:
+                    28:23:f6:b6:b4:68:7f:de:e8:25:4e:1b:87:fb:09:
+                    a6:c4:80:42:6a:00:de:d5:2a:11:6c:24:60:f6:7b:
+                    fa:6e:37:41:9e:c9:2b:06:07:72:1e:b5:fb:3f:a5:
+                    fd:2b
+                Exponent: 65537 (0x10001)
+        X509v3 extensions:
+            X509v3 Subject Alternative Name: 
+                IP Address:192.168.100.26, IP Address:127.0.0.1, DNS:mahan, DNS:mahan.local, DNS:localhost
+            X509v3 Basic Constraints: critical
+                CA:TRUE
+            X509v3 Key Usage: critical
+                Digital Signature, Key Encipherment, Certificate Sign
+            X509v3 Extended Key Usage: 
+                TLS Web Server Authentication
+            X509v3 Subject Key Identifier: 
+                D0:B2:24:DD:39:4F:22:C2:CC:87:03:E1:69:AE:80:66:31:F8:33:A3
+    Signature Algorithm: sha256WithRSAEncryption
+    Signature Value:
+        08:cf:03:6b:82:3b:cf:f5:55:2e:d3:8f:92:11:59:a7:38:0b:
+        87:77:56:db:35:bd:6c:01:b6:f7:d3:7b:1b:44:00:3f:53:53:
+        84:e6:38:67:b3:21:b8:b9:7f:ce:81:d4:a2:c5:c3:36:2e:09:
+        73:8a:28:50:e7:4c:4e:ad:b7:b4:71:f0:9b:84:d9:26:c6:c3:
+        64:29:c5:00:1c:50:65:cb:8b:a4:a5:00:38:f4:00:6f:e4:45:
+        d6:99:f9:02:5c:8c:c0:b6:c3:77:53:da:f0:94:b3:06:d2:e2:
+        5c:7e:1c:47:d9:2a:d2:96:62:c4:6a:b4:bc:a4:a3:81:d0:32:
+        0d:eb:d6:aa:c4:50:6f:82:d4:bd:f9:e4:7e:55:16:db:a7:c5:
+        d4:bc:ac:e4:aa:67:97:17:6b:26:06:6c:04:49:eb:af:84:af:
+        e5:17:f2:cb:2d:00:12:9d:fd:0d:97:c2:d3:15:61:2d:ce:00:
+        8e:59:56:d5:ad:c8:1b:84:ba:e1:3e:33:77:eb:1b:6c:54:06:
+        58:a1:1a:ea:71:3e:00:77:f2:86:c9:25:f8:98:e1:4f:a4:12:
+        9d:8a:42:0a:a7:aa:86:cf:cb:af:b7:23:ec:f5:d2:51:50:0f:
+        ce:d0:8b:22:b6:ad:1c:dd:0f:1f:27:aa:7d:82:64:25:fd:90:
+        31:4e:37:82

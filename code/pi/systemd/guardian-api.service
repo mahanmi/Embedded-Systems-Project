@@ -1,0 +1,59 @@
+# =============================================================================
+#  FastAPI documentation / gateway layer (part 2-b)
+#
+#  ORDERING RATIONALE
+#  ------------------
+#  Requires=guardian.service -- this process holds no logic of its own; every
+#      route forwards to the C daemon's loopback listener. Without that
+#      listener it can only serve 502s, so it should not run at all.
+#  After=guardian.service    -- combined with the C daemon's Type=notify, this
+#      guarantees 127.0.0.1:8081 is accepting connections before uvicorn binds,
+#      so the very first Swagger "Try it out" click works.
+#
+#  This is the outermost leaf of the dependency chain:
+#      guardian-ingest.socket -> guardian-vision -> guardian -> guardian-api
+# =============================================================================
+[Unit]
+Description=Guardian API documentation layer (FastAPI/Swagger, proxies to the C daemon)
+Documentation=https://192.168.100.26:8443/docs
+Requires=guardian.service
+After=guardian.service
+# Restart forever; never let systemd disable the unit.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=guardian
+Group=guardian
+
+# The gateway needs the bearer token so Swagger's "Authorize" button can be
+# pre-filled from the server side rather than pasted into a browser.
+EnvironmentFile=/etc/guardian/secrets.env
+
+ExecStart=/usr/bin/python3 /opt/guardian/bin/guardian_api.py \
+    --config /etc/guardian/guardian.conf \
+    --host 0.0.0.0 --port 8443 \
+    --ssl-certfile /etc/guardian/certs/guardian.crt \
+    --ssl-keyfile  /etc/guardian/certs/guardian.key
+
+Restart=always
+RestartSec=3
+
+Environment=PYTHONUNBUFFERED=1
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+ReadWritePaths=/var/log/guardian
+
+MemoryMax=160M
+
+[Install]
+WantedBy=multi-user.target

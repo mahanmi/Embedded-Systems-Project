@@ -1,0 +1,18 @@
+=== http://192.168.100.26/ ===
+HTTP/1.1 301 Moved Permanently
+HTTP/1.1 301 Moved Permanently
+Date: Mon, 27 Jul 2026 04:25:58 GMT
+Date: Mon, 27 Jul 2026 04:25:58 GMT
+Location: https://192.168.100.26/
+Location: https://192.168.100.26/
+Content-Type: text/html; charset=utf-8
+Content-Type: text/html; charset=utf-8
+Strict-Transport-Security: max-age=31536000
+Strict-Transport-Security: max-age=31536000
+Content-Length: 150
+Content-Length: 150
+
+
+<!doctype html><meta charset=utf-8><title>301 Moved Permanently</title><h1>301 Moved Permanently</h1><p>This service is available over HTTPS only.</p>
+
+followed: 200 https://192.168.100.26/

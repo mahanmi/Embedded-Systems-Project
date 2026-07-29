@@ -1,0 +1,55 @@
+=== systemd-analyze ===
+Startup finished in 11.812s (kernel) + 53.022s (userspace) = 1min 4.835s 
+graphical.target reached after 44.195s in userspace.
+
+=== systemd-analyze blame (top 25) ===
+17.504s snapd.seeded.service
+15.825s snapd.service
+14.745s cloud-config.service
+ 8.756s cloud-final.service
+ 6.809s apport.service
+ 6.192s cloud-init-local.service
+ 6.092s dev-mmcblk0p2.device
+ 5.925s user@1000.service
+ 5.902s dpkg-db-backup.service
+ 5.275s logrotate.service
+ 5.233s networkd-dispatcher.service
+ 4.999s cloud-init.service
+ 3.875s systemd-journal-flush.service
+ 3.718s rsyslog.service
+ 3.464s udisks2.service
+ 3.391s systemd-udev-trigger.service
+ 3.315s apparmor.service
+ 3.182s chrony.service
+ 2.744s ModemManager.service
+ 2.655s systemd-resolved.service
+ 2.617s guardian.service
+ 2.404s ssh.service
+ 2.390s polkit.service
+ 1.685s systemd-fsck@dev-disk-by\x2dlabel-system\x2dboot.service
+ 1.634s systemd-rfkill.service
+
+=== our own units ===
+ 2.617s guardian.service
+  115ms guardian-ingest.socket
+
+=== critical chain ===
+The time when unit became active or started is printed after the "@" character.
+The time the unit took to start is printed after the "+" character.
+
+guardian.service +2.617s
+└─time-sync.target @31.360s
+  └─chrony.service @28.108s +3.182s
+    └─network.target @28.044s
+      └─wpa_supplicant.service @27.342s +695ms
+        └─dbus.service @26.334s +696ms
+          └─basic.target @26.269s
+            └─sockets.target @26.268s
+              └─snapd.socket @26.171s +92ms
+                └─sysinit.target @26.084s
+                  └─cloud-init.service @21.069s +4.999s
+                    └─cloud-init-local.service @14.852s +6.192s
+                      └─systemd-remount-fs.service @3.658s +492ms
+                        └─systemd-journald.socket @2.554s
+                          └─-.mount @2.206s
+                            └─-.slice @2.206s

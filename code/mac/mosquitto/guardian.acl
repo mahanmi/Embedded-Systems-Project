@@ -1,0 +1,33 @@
+# =============================================================================
+#  Mosquitto ACL -- Smart Guardian System
+#
+#  The board's credential is scoped to this project's topic tree only. Even if
+#  the password leaked, the holder could not read or publish anywhere else on
+#  the broker. This goes beyond the brief's "dedicated user with a password"
+#  requirement and is cheap to add.
+# =============================================================================
+
+# --- the board -----------------------------------------------------------
+# Publishes telemetry, person counts, alarms, its own status and events.
+user guardian
+topic write telemetry/402170516/home
+topic write persons/402170516/home
+topic write alarm/402170516/home
+topic write status/402170516/home
+topic write event/402170516/home
+# Subscribed to nothing: the board never takes commands over MQTT, only over
+# the authenticated REST API. Narrower attack surface.
+
+# --- the laptop's viewer --------------------------------------------------
+# Read-only across the whole project tree.
+user viewer
+topic read telemetry/402170516/home
+topic read persons/402170516/home
+topic read alarm/402170516/home
+topic read status/402170516/home
+topic read event/402170516/home
+# $SYS lets the viewer show broker health during the demo.
+topic read $SYS/#
+
+# No `topic` lines outside a `user` block, so unauthenticated access grants
+# nothing even if allow_anonymous were ever turned back on by accident.

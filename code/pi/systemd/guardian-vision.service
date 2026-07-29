@@ -1,0 +1,70 @@
+# =============================================================================
+#  Image-processing service (part 3-a)
+#
+#  ORDERING RATIONALE
+#  ------------------
+#  Requires=guardian-ingest.socket  -- hard dependency: without the frame
+#      source there is nothing to detect, so systemd must not even attempt to
+#      start this unit if the socket cannot be bound, and stopping the socket
+#      stops this too.
+#  After=guardian-ingest.socket     -- ordering: bind the port before the
+#      detector tries to accept on it.
+#
+#  This is the unit the brief's example refers to ("image processing after the
+#  camera is ready"). It deliberately sits BEFORE guardian.service, because the
+#  C daemon's watchdog starts judging frame freshness as soon as it is up.
+# =============================================================================
+[Unit]
+Description=Guardian image processing (OpenCV MobileNet-SSD person detection)
+Documentation=file:/opt/guardian/README
+Requires=guardian-ingest.socket
+After=guardian-ingest.socket network-online.target
+Wants=network-online.target
+# Restart forever. A permanently unplugged capture host must not disable the
+# unit, because the C daemon's watchdog (part 4-3) also drives restarts here.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=guardian
+Group=guardian
+
+ExecStart=/usr/bin/python3 /opt/guardian/bin/guardian_vision.py \
+    --config /etc/guardian/guardian.conf \
+    --model-dir /opt/guardian/models \
+    --listen-fd 3
+
+# Inherit the already-bound listening socket from guardian-ingest.socket.
+Sockets=guardian-ingest.socket
+
+Restart=always
+RestartSec=3
+
+# OpenCV is happiest with an explicit thread count on a 4-core A53; leaving it
+# to auto-detect oversubscribes once the C daemon and uvicorn are also running.
+Environment=OPENCV_NUM_THREADS=3
+Environment=OMP_NUM_THREADS=3
+Environment=PYTHONUNBUFFERED=1
+
+# --- sandboxing ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+ReadWritePaths=/var/log/guardian /dev/shm
+# The detector needs /dev/video* only if a real camera is ever attached.
+DeviceAllow=char-video4linux rw
+SupplementaryGroups=video
+
+# 1 GB of RAM total: cap the detector so an OpenCV leak cannot take the board
+# down with it. systemd will restart it if the limit is hit.
+MemoryMax=420M
+MemoryHigh=380M
+
+[Install]
+WantedBy=multi-user.target

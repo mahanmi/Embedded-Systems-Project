@@ -1,0 +1,39 @@
+=== before ===
+MainPID: 21711
+1
+
+=== after ===
+MainPID: 22213
+NRestarts: 1 -> 2
+
+=== journalctl ===
+Jul 27 07:55:42 mahan systemd[1]: guardian.service: Main process exited, code=killed, status=9/KILL
+Jul 27 07:55:42 mahan systemd[1]: guardian.service: Failed with result 'signal'.
+Jul 27 07:55:42 mahan systemd[1]: guardian.service: Consumed 1.385s CPU time, 3.9M memory peak, 0B memory swap peak.
+Jul 27 07:55:44 mahan systemd[1]: guardian.service: Scheduled restart job, restart counter is at 2.
+Jul 27 07:55:45 mahan systemd[1]: Starting guardian.service - Guardian main daemon (HTTPS server, REST API, MQTT, mail, black box)...
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.057 Smart Guardian System 1.0.0 starting (pid 22213)
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.058 config: loaded /etc/guardian/guardian.conf
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.058 identity   : Mahan Majlesi (402170516)
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.059 web        : http:80 -> https:443 (loopback 8081) host=192.168.100.26
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.059 mqtt       : guardian@Mahans-MacBook-Pro.local:1883 (fallback 127.0.0.1) keepalive=20s telemetry every 5s
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.059 mail       : you@example.com -> you@example.com via smtps://smtp.gmail.com:465 (debounce 30s, guard 3s)
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.059 storage    : /var/lib/guardian/guardian.db (ring 1000)
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.059 vision     : capture 640px @ 10 fps, network input 300px
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.059 watchdog   : stale after 30s
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.059 thermal    : throttle above 70.0 C, recover below 65.0 C
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.060 secrets    : SMTP=<set,16 chars> MQTT=<set,24 chars> TOKEN=<set,48 chars>
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.061 sysinfo: 4 cores, thermal zone reads 62.8 C
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.062 shared frame segment ready (514 KiB, 2 slots)
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.074 store: /var/lib/guardian/guardian.db open (ring=1000 rows)
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.085 mailer: worker started (debounce 30s, guard 3s)
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.098 mqtt: client 'guardian-402170516' started, LWT on status/402170516/home (QoS 1, retained)
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.099 httpd: dashboard page ready (13028 bytes)
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.105 mqtt: connected to Mahans-MacBook-Pro.local:1883 as 'guardian'
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.145 httpd: HTTPS listening on :443 (TLS, CN=402170516)
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.147 httpd: HTTP listening on :80 (301 -> https)
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.151 httpd: loopback API on 127.0.0.1:8081 (for the Swagger gateway)
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.153 control: target_fps=10 target_width=640 net_input=300
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.156 events: telemetry, detection and supervisor threads running
+Jul 27 07:55:46 mahan guardian[22213]: 07:55:46.158 startup complete
+Jul 27 07:55:46 mahan systemd[1]: Started guardian.service - Guardian main daemon (HTTPS server, REST API, MQTT, mail, black box).

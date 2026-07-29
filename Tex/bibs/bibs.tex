@@ -1,0 +1,42 @@
+
+% -------------------------------------------------------
+%  Bibliography
+% -------------------------------------------------------
+
+\clearpage
+\phantomsection
+\addcontentsline{toc}{chapter}{مراجع}
+
+\begin{latin}
+\baselineskip=.8\baselineskip
+\footnotesize\bibliographystyle{ieeetr-fa}
+%\bibliographystyle{./styles/packages/unsrtabbrv}
+%\bibliographystyle{
+
+% Uncomment next line to include uncited references
+% \nocite{*}
+
+\section{CODES}
+\setcounter{subsection}{1}
+\subsection{Q2}
+\inputminted[frame=single, bgcolor=gray!10,fontsize=\scriptsize]{matlab}{Matlab/Q2.m}
+\clearpage
+\subsection{Q3}
+\subsubsection{(b)}
+\inputminted[frame=single, bgcolor=gray!10,fontsize=\scriptsize]{matlab}{Matlab/Q3b.m}
+\clearpage
+\subsubsection{(c)}
+\inputminted[frame=single, bgcolor=gray!10,fontsize=\scriptsize]{matlab}{Matlab/Q3c.m}
+\clearpage
+\subsubsection{(d)}
+\inputminted[frame=single, bgcolor=gray!10,fontsize=\scriptsize]{matlab}{Matlab/Q3d.m}
+\clearpage
+\subsection{Q4}
+\inputminted[frame=single, bgcolor=gray!10,fontsize=\scriptsize]{matlab}{Matlab/Q4.m}
+\clearpage
+\subsection{Q5}
+\inputminted[frame=single, bgcolor=gray!10,fontsize=\scriptsize]{matlab}{Matlab/Q5.m}
+
+\bibliography{bibs/full,bibs/refs}
+ 
+\end{latin}

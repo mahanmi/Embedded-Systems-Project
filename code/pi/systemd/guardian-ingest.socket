@@ -1,0 +1,37 @@
+# =============================================================================
+#  Frame ingest socket
+#
+#  The board has no camera of its own, so the brief's fallback applies: the
+#  laptop's webcam is streamed to the board. This socket unit owns the
+#  listening TCP port instead of the detector owning it, which buys two things:
+#
+#    1. The port is bound the instant systemd reaches sockets.target, long
+#       before OpenCV has finished loading a 23 MB Caffe model. The laptop can
+#       therefore connect at any time without a connection-refused race.
+#
+#    2. It gives the dependency chain a real "camera is ready" milestone --
+#       the equivalent of waiting for a /dev/video node on a board that has
+#       one. guardian-vision.service Requires= this unit, so the ordering the
+#       brief asks for is enforced by systemd rather than by a sleep.
+# =============================================================================
+[Unit]
+Description=Guardian frame ingest socket (MJPEG from the capture host)
+Documentation=file:/opt/guardian/README
+PartOf=guardian-vision.service
+
+[Socket]
+# systemd would otherwise look for a same-named guardian-ingest.service; the
+# unit that actually consumes this socket is the detector.
+Service=guardian-vision.service
+ListenStream=0.0.0.0:9000
+Accept=no
+# One pending connection is plenty: a second capture host would be an error.
+Backlog=1
+ReusePort=false
+NoDelay=true
+SocketUser=guardian
+SocketGroup=guardian
+SocketMode=0660
+
+[Install]
+WantedBy=sockets.target

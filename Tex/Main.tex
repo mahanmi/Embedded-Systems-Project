@@ -1,0 +1,51 @@
+
+%--------------------------------------------------------------------------
+%
+%  Seminar Template
+%  [Put Your Seminar Title Here]
+%  By: [Put Your Name Here]
+%
+%--------------------------------------------------------------------------
+
+
+
+\documentclass[oneside,a4paper,12pt]{article}
+
+\input{styles/common.tex}
+\input{styles/custom.tex}
+
+\begin{document}
+	
+	
+	% -------------------- Front Pages --------------------
+	
+	\include{front/info}
+	\pagestyle{empty}
+	
+	\include{front/template/title}
+	%\input{front/template/besmellah.tex}‌  % بسم‌الله
+	
+	
+	\pagestyle{plain}
+	\pagenumbering{arabic}
+	%\pagenumbering{tartibi}
+	
+	% -------------------- Chapters -------------------
+	% Final project report. chapters/context.tex is the earlier HW3 write-up and
+	% is kept in the tree but not included here -- its \lstinputlisting calls
+	% point at ../code/ex1_socket/, which does not exist in this project, so
+	% including it stops the build.
+	\include{chapters/project}
+	\include{chapters/project_b}
+
+	% -------------------- Bibliography & Dictionary --------------------
+
+	%\include{bibs/bibs}
+	%\include{front/dictionary}
+	
+	% -------------------- Appendices --------------------
+		
+	
+	% -------------------- The End! --------------------
+	
+\end{document}
