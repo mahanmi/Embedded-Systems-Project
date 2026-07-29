@@ -40,11 +40,16 @@ Sockets=guardian-ingest.socket
 Restart=always
 RestartSec=3
 
-# OpenCV is happiest with an explicit thread count on a 4-core A53; leaving it
-# to auto-detect oversubscribes once the C daemon and uvicorn are also running.
-Environment=OPENCV_NUM_THREADS=3
-Environment=OMP_NUM_THREADS=3
+# Thread count is NOT set here. It used to be OPENCV_NUM_THREADS=3, which
+# silently disagreed with cv_threads in guardian.conf -- the detector calls
+# cv2.setNumThreads() at startup and that wins, so the unit's value looked
+# authoritative while having no effect. One knob, in the config file.
 Environment=PYTHONUNBUFFERED=1
+
+# Set GUARDIAN_DEBUG_CONF=1 to log the unthresholded best person score, the ROI
+# in use and the boxes that survived, per inference. Without it the only
+# observable is the thresholded count, which cannot tell "scored 0.44 and was
+# rejected" apart from "saw nothing" -- and those need different fixes.
 
 # Needed for camera_source=rtsp: GUARDIAN_CAM_PASS is the camera account's
 # password, and it is deliberately absent from guardian.conf because the RTSP

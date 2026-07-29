@@ -69,6 +69,7 @@ DEFAULT_NET_INPUT = 300
 # against the last analysed one on a tiny greyscale thumbnail; inference runs
 # only when something actually changed, or when the heartbeat expires so a
 # departure is still noticed promptly.
+DEBUG_CONF = os.environ.get("GUARDIAN_DEBUG_CONF") == "1"
 MOTION_THRESHOLD = 2.0      # mean absolute difference, 0..255
 MOTION_HEARTBEAT = 3.0      # seconds; re-run inference even in a still scene
 
@@ -547,7 +548,8 @@ def main() -> int:
                 continue
             if item is None:
                 break
-            small, net_in, fw, fh = item
+            small, net_in, fw, fh, roi = item
+            rx, ry, rw, rh = roi
             try:
                 t0 = time.monotonic()
                 blob = cv2.dnn.blobFromImage(
@@ -560,6 +562,17 @@ def main() -> int:
                 det = net.forward()
                 ms = (time.monotonic() - t0) * 1000.0
 
+                # Unthresholded best person score, for diagnosing "it did not
+                # see me" reports. Without this the only observable is the
+                # thresholded count, which cannot distinguish "scored 0.44 and
+                # was rejected" from "scored nothing at all" -- two problems
+                # with completely different fixes.
+                best_p = 0.0
+                if DEBUG_CONF:
+                    best_p = max([float(det[0, 0, i, 2])
+                                  for i in range(det.shape[2])
+                                  if int(det[0, 0, i, 1]) == PERSON_CLASS] + [0.0])
+
                 found = []
                 for i in range(det.shape[2]):
                     conf = float(det[0, 0, i, 2])
@@ -567,19 +580,31 @@ def main() -> int:
                         continue
                     if int(det[0, 0, i, 1]) != PERSON_CLASS:
                         continue
-                    x1 = max(0, int(det[0, 0, i, 3] * fw))
-                    y1 = max(0, int(det[0, 0, i, 4] * fh))
-                    x2 = min(fw - 1, int(det[0, 0, i, 5] * fw))
-                    y2 = min(fh - 1, int(det[0, 0, i, 6] * fh))
+                    # The network's outputs are fractions of the ROI it was
+                    # given, so they scale by the ROI's size and shift by its
+                    # origin. Getting this wrong draws boxes in the right shape
+                    # at the wrong place, which looks like a detection bug
+                    # rather than a coordinate bug.
+                    x1 = max(0, int(det[0, 0, i, 3] * rw) + rx)
+                    y1 = max(0, int(det[0, 0, i, 4] * rh) + ry)
+                    x2 = min(fw - 1, int(det[0, 0, i, 5] * rw) + rx)
+                    y2 = min(fh - 1, int(det[0, 0, i, 6] * rh) + ry)
                     if x2 > x1 and y2 > y1:
                         found.append((x1, y1, x2, y2, conf))
+
+                geom_ok = (fw, fh) == (last_frame_wh[0], last_frame_wh[1])
+                if DEBUG_CONF:
+                    log(f"debug: roi={roi} best_person={best_p:.3f} "
+                        f"kept={len(found)} geom_ok={geom_ok} "
+                        f"worker_wh=({fw},{fh}) main_wh={tuple(last_frame_wh)} "
+                        f"boxes={found[:2]}")
 
                 with infer_lock:
                     # Boxes are absolute pixels against the frame the worker
                     # saw. If the capture width changed underneath us they no
                     # longer apply anywhere, so drop them rather than draw a
                     # box in the wrong place.
-                    infer_state["boxes"] = found if (fw, fh) == (last_frame_wh[0], last_frame_wh[1]) else []
+                    infer_state["boxes"] = found if geom_ok else []
                     infer_state["ms"] = ms
                     infer_state["count"] += 1
             except Exception as exc:                       # noqa: BLE001
@@ -590,6 +615,50 @@ def main() -> int:
     last_frame_wh = [0, 0]
     infer_thread = threading.Thread(target=infer_worker, name="infer", daemon=True)
     infer_thread.start()
+
+    # --- detection region of interest ------------------------------------
+    #
+    # MobileNet-SSD takes a SQUARE input, so handing it a 16:9 frame stretches
+    # every person horizontally by 1.78x. Measured on 12 recorded frames of a
+    # person standing 42% of frame height away from this camera:
+    #
+    #   whole frame stretched to 300px   mean conf 0.000    0/12 detected
+    #   whole frame letterboxed to 300   mean conf 0.000    0/12 detected
+    #   square crop of the alley -> 300  mean conf 0.806   12/12 detected
+    #   whole frame stretched to 512px   mean conf 0.056    0/12 detected
+    #
+    # So this is not a resolution problem -- 512px barely moved it, and the
+    # subject was already 125px tall in the network. Two things had to be true
+    # together: correct proportions AND enough pixels. Letterboxing fixes the
+    # aspect but shrinks the person to ~70px; the square crop fixes the aspect
+    # AND spends all 300px on the half of the frame people actually walk in
+    # (the left 44% of this view is our own wall, rooftop and plants).
+    #
+    # Cost is unchanged: 300x300 either way. Detection runs on the crop while
+    # the stream still shows the whole scene, with boxes mapped back.
+    #
+    # roi = "auto" takes the square nearest the configured edge; an explicit
+    # "x,y,w,h" in capture-frame pixels overrides it for a differently framed
+    # camera.
+    roi_cfg = str(cfg.get("detect_roi", "auto")).strip().lower()
+    roi_align = str(cfg.get("detect_roi_align", "right")).strip().lower()
+
+    def roi_for(fw, fh):
+        if roi_cfg not in ("auto", ""):
+            try:
+                x, y, rw, rh = (int(v) for v in roi_cfg.split(","))
+                x = max(0, min(x, fw - 1)); y = max(0, min(y, fh - 1))
+                return x, y, max(1, min(rw, fw - x)), max(1, min(rh, fh - y))
+            except ValueError:
+                pass                      # fall through to auto on a bad value
+        side = min(fw, fh)                # the largest undistorted square
+        if roi_align == "left":
+            x = 0
+        elif roi_align == "center":
+            x = (fw - side) // 2
+        else:
+            x = fw - side                 # right: the alley side of this view
+        return x, (fh - side) // 2, side, side
 
     # --- frame source ------------------------------------------------------
     # Two ways in, chosen by configuration so switching back is a one-line edit
@@ -753,9 +822,12 @@ def main() -> int:
                 prev_thumb = thumb
                 last_infer_at = now
                 infer_busy.set()
+                rx, ry, rw, rh = roi_for(w, h)
                 try:
-                    infer_q.put_nowait((cv2.resize(img, (net_input, net_input)),
-                                        net_input, w, h))
+                    infer_q.put_nowait((
+                        cv2.resize(img[ry:ry + rh, rx:rx + rw],
+                                   (net_input, net_input)),
+                        net_input, w, h, (rx, ry, rw, rh)))
                 except queue.Full:
                     infer_busy.clear()
             else:
