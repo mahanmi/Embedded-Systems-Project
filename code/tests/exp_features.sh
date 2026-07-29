@@ -76,6 +76,16 @@ exp_3_4() {
     # ---- part 2: the broker disappears for three minutes -------------------
     hdr "part 2: stopping the broker for 3 minutes"
     local OUTAGE=${OUTAGE_SEC:-180}
+
+    # Note how the broker is being run BEFORE killing it, so it can be put back
+    # the same way rather than downgraded to an unmanaged process.
+    local BROKER_MANAGED=0
+    if brew services list 2>/dev/null | grep -qE '^mosquitto\s+(started|scheduled)'; then
+        BROKER_MANAGED=1
+        note "broker is managed by brew services; it will be restored that way"
+    else
+        note "broker is running unmanaged; it will be restored that way"
+    fi
     printf '\n=== broker stopped at %s ===\n' "$(iso_now)" >>"$LOG"
     pkill -f "$MOSQ_BIN" 2>/dev/null
     sleep 5
@@ -101,7 +111,22 @@ exp_3_4() {
                      || bad "web server returned $WEB during the outage"
 
     hdr "restarting the broker"
-    ( "$MOSQ_BIN" -c "$MOSQ_CONF" -d >/dev/null 2>&1 & )
+    # Restore it the way it was found. The first version always relaunched a
+    # bare detached process, so a broker that had been running under
+    # `brew services` came back unmanaged -- and then died at the next logout
+    # with nothing to restart it. That is exactly what happened after a real
+    # run of this experiment: the dashboard reported "MQTT broker offline" two
+    # days later and the board had been failing over between its two addresses
+    # every 25 s ever since.
+    if [ "$BROKER_MANAGED" = 1 ]; then
+        brew services start mosquitto >/dev/null 2>&1
+        note "restarted via brew services (as it was before)"
+    else
+        ( "$MOSQ_BIN" -c "$MOSQ_CONF" -d >/dev/null 2>&1 & )
+        note "restarted as a detached process (as it was before)"
+        note "NOTE: this will not survive a logout or reboot. To make the broker"
+        note "      permanent:  brew services start mosquitto"
+    fi
     sleep 6
     if wait_until 90 "the board to reconnect" \
             pi 'curl -sk --max-time 4 https://127.0.0.1/api/v1/telemetry | grep -q "\"mqtt_connected\":true"'; then
