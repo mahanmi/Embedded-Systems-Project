@@ -134,8 +134,10 @@ static void *detect_loop(void *arg)
         state_note_detection(persons, f->ts_wall);
 
         /* Person count always goes out on MQTT, including the drop to zero,
-         * so a subscriber can reconstruct occupancy. */
-        mqttc_publish_persons(persons, f->ts_wall, f->fps);
+         * so a subscriber can reconstruct occupancy. The vehicle count rides
+         * along in the same payload purely as information -- it is not part of
+         * any trigger condition below. */
+        mqttc_publish_persons(persons, f->vehicles, f->ts_wall, f->fps);
 
         if (persons == 0) {
             /* Record the scene emptying at most once a minute so an empty

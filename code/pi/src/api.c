@@ -59,11 +59,17 @@ char *api_persons(int *status)
 
     iso8601_utc(f.ts_wall, iso, sizeof iso);
     *status = 200;
-    return dupf("{\"persons\":%d,\"timestamp\":\"%s\",\"epoch\":%.3f,"
+    /* `vehicles` sits beside `persons`, never inside it. The brief grades the
+     * person count, and every consumer of this endpoint -- the dashboard, the
+     * black box, experiment 3-5 -- reads `persons` expecting exactly what it
+     * always meant. Each entry in `detections` now carries a "cls" telling the
+     * two apart. */
+    return dupf("{\"persons\":%d,\"vehicles\":%d,\"timestamp\":\"%s\","
+                "\"epoch\":%.3f,"
                 "\"student_id\":\"%s\",\"fps\":%.2f,\"frame_age_sec\":%.2f,"
                 "\"resolution\":\"%dx%d\",\"inference_ms\":%.1f,"
                 "\"guard_mode\":%s,\"detections\":%s,\"available\":true}",
-                f.persons, iso, f.ts_wall, g_cfg.student_id, f.fps,
+                f.persons, f.vehicles, iso, f.ts_wall, g_cfg.student_id, f.fps,
                 now_wall() - f.ts_wall, f.width, f.height, f.infer_ms,
                 state_guard_mode() ? "true" : "false",
                 f.det[0] ? f.det : "[]");

@@ -59,6 +59,10 @@ SLOT_HEIGHT = 40
 SLOT_INFER_MS = 44
 SLOT_DET_LEN = 48
 SLOT_FLAGS = 52
+# Vehicle count. Occupies the first word of the slot header's existing padding
+# (_pad0[2] at 56..63 in shmframe.h), so the slot size and every other offset
+# are unchanged -- a reader built before this field simply ignores those bytes.
+SLOT_VEHICLES = 56
 SLOT_DET = 64
 SLOT_JPEG = SLOT_DET + DETJSON_MAX
 SLOT_SIZE = SLOT_JPEG + JPEG_MAX
@@ -116,7 +120,8 @@ class ShmWriter:
     # ---------------------------------------------------------------- write
     def publish(self, jpeg: bytes, persons: int, ts_wall: float, ts_mono: float,
                 fps: float, width: int, height: int, infer_ms: float,
-                det_json: bytes = b"[]", synthetic: bool = False) -> bool:
+                det_json: bytes = b"[]", synthetic: bool = False,
+                vehicles: int = 0) -> bool:
         """Publish one annotated frame. Returns False if the JPEG is too big.
 
         `synthetic=True` marks a placeholder produced while no capture host is
@@ -146,6 +151,7 @@ class ShmWriter:
         _U32.pack_into(self.mm, base + SLOT_DET_LEN, len(det_json))
         _U32.pack_into(self.mm, base + SLOT_FLAGS,
                        FRAME_SYNTHETIC if synthetic else 0)
+        _I32.pack_into(self.mm, base + SLOT_VEHICLES, vehicles)
 
         self.mm[base + SLOT_DET:base + SLOT_DET + len(det_json)] = det_json
         self.mm[base + SLOT_JPEG:base + SLOT_JPEG + len(jpeg)] = jpeg

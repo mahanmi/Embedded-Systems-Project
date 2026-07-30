@@ -101,6 +101,13 @@
       <div class="sub" style="margin-top:8px">
         last frame <span id="frameage">--</span> ago
       </div>
+      <!-- Vehicles are informational only: they are never mailed, never raise
+           the alarm topic and never enter the black box. -->
+      <div class="sub" id="vehrow" style="margin-top:6px;display:none">
+        <span style="color:#ffb43c">&#9632;</span>
+        <b id="vehicles">0</b> <span id="vehsuffix">vehicle</span>
+        <span style="opacity:.6">&mdash; not alarmed</span>
+      </div>
     </div>
 
     <!-- part 4-1: anti-theft mode, toggled from the page and over the API -->
@@ -244,6 +251,12 @@ async function tick(){
       $("fps").textContent = p.fps.toFixed(1);
       $("infer").textContent = p.inference_ms.toFixed(0);
       $("frameage").textContent = p.frame_age_sec.toFixed(1) + " s";
+      // `?? 0` so a board still running the pre-vehicle build (no such key)
+      // shows nothing rather than "undefined".
+      const v = p.vehicles ?? 0;
+      $("vehrow").style.display = v ? "" : "none";
+      $("vehicles").textContent = v;
+      $("vehsuffix").textContent = v === 1 ? "vehicle" : "vehicles";
       $("streaminfo").textContent =
         p.resolution + " · " + p.fps.toFixed(1) + " fps · " +
         "inference " + p.inference_ms.toFixed(0) + " ms";

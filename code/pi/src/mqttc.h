@@ -25,7 +25,7 @@ void mqttc_stop(void);
 void mqttc_publish_telemetry(void);
 
 /* Publishes a person-count change. */
-void mqttc_publish_persons(int persons, double ts_wall, double fps);
+void mqttc_publish_persons(int persons, int vehicles, double ts_wall, double fps);
 
 /* Publishes an intrusion alarm (guard mode only). */
 void mqttc_publish_alarm(int persons, double ts_wall, double cpu_temp_c);

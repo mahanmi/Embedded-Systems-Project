@@ -85,6 +85,7 @@ static bool read_slot(struct guardian_frame *out, bool want_jpeg)
         out->ts_wall  = s->ts_wall;
         out->ts_mono  = s->ts_mono;
         out->persons  = s->persons;
+        out->vehicles = s->vehicles;
         out->fps      = s->fps;
         out->width    = s->width;
         out->height   = s->height;

@@ -270,7 +270,7 @@ void mqttc_publish_telemetry(void)
     pub(T_TELEMETRY, payload, false);
 }
 
-void mqttc_publish_persons(int persons, double ts_wall, double fps)
+void mqttc_publish_persons(int persons, int vehicles, double ts_wall, double fps)
 {
     char iso[40];
     iso8601_utc(ts_wall, iso, sizeof iso);
@@ -278,13 +278,18 @@ void mqttc_publish_persons(int persons, double ts_wall, double fps)
     /* `epoch` is the capture instant taken from CLOCK_REALTIME inside the
      * detector. Experiment 3-5 subtracts it from the laptop's receive time to
      * get the end-to-end delay, so it must be the capture time and not the
-     * publish time. */
+     * publish time.
+     *
+     * `vehicles` is appended rather than inserted, and the topic is unchanged,
+     * so anything already subscribed keeps parsing this payload exactly as
+     * before. Nothing downstream treats it as a trigger. */
     char payload[384];
     snprintf(payload, sizeof payload,
         "{\"student_id\":\"%s\",\"persons\":%d,\"timestamp\":\"%s\","
-        "\"epoch\":%.3f,\"fps\":%.2f,\"cpu_temp_c\":%.2f,\"guard_mode\":%s}",
+        "\"epoch\":%.3f,\"fps\":%.2f,\"cpu_temp_c\":%.2f,\"guard_mode\":%s,"
+        "\"vehicles\":%d}",
         g_cfg.student_id, persons, iso, ts_wall, fps, sysinfo_cpu_temp(),
-        state_guard_mode() ? "true" : "false");
+        state_guard_mode() ? "true" : "false", vehicles);
 
     pub(T_PERSONS, payload, false);
 }

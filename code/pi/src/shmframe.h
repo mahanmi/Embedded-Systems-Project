@@ -55,7 +55,13 @@ struct guardian_slot {
     float    infer_ms;     /* 44: inference time for this frame          */
     uint32_t det_len;      /* 48: bytes used in `det` below              */
     uint32_t flags;        /* 52: GUARDIAN_FRAME_*                       */
-    uint32_t _pad0[2];     /* 56..63 */
+    /* Vehicles (car/bus/motorbike) seen in this frame. Carved out of the
+     * slot header's existing padding, so the slot size and every offset above
+     * are untouched. Counted and reported only -- it deliberately does NOT
+     * feed the mailer, the guard alarm or the black box, because a parked car
+     * is permanent and would alert forever. */
+    int32_t  vehicles;     /* 56 */
+    uint32_t _pad0;        /* 60..63 */
     uint8_t  det[GUARDIAN_DETJSON_MAX];   /* 64 */
     uint8_t  jpeg[GUARDIAN_JPEG_MAX];
 };
@@ -90,6 +96,7 @@ struct guardian_frame {
     double   ts_wall;
     double   ts_mono;
     int      persons;
+    int      vehicles;
     float    fps;
     int      width;
     int      height;
