@@ -12,18 +12,22 @@
 #  hours, cycling between full rate and 2 fps.
 #
 #  This script moves the decode to the machine that can afford it. The laptop
-#  pulls from the DVR, decodes in hardware through VideoToolbox, downscales, and
-#  re-encodes to MJPEG for the board -- which is exactly the cheap format the
-#  board already handled comfortably before the DVR existed. Nothing on the
-#  board changes: it goes back to camera_source=socket and the same
-#  guardian-ingest.socket path that was already built and tested.
+#  pulls from the DVR, decodes, downscales, and re-encodes to MJPEG for the board
+#  -- which is exactly the cheap format the board already handled comfortably
+#  before the DVR existed. Nothing on the board changes: it goes back to
+#  camera_source=socket and the same guardian-ingest.socket path that was
+#  already built and tested.
 #
-#  Because the decode happens here, quality can go UP rather than down. The
-#  board was limited to the 960x576 H.264 sub-stream; this laptop can decode the
-#  1920x1080 H.265 MAIN stream without noticing, then hand the board a clean
-#  downscale of it. A 640-wide frame derived from 1080p carries visibly more
-#  detail than one derived from 960x576, which matters for a detector that has
-#  to find people at a distance.
+#  An earlier version of this file claimed the laptop could take the 1080p H.265
+#  MAIN stream and hand the board a better downscale of it. That turned out to be
+#  wrong twice over, and both corrections are recorded at the STREAM and -hwaccel
+#  settings below: this DVR cannot deliver the main stream without packet loss,
+#  and VideoToolbox cannot decode its video reliably even when the bitstream is
+#  clean. The sub-stream in software is what actually works.
+#
+#  No detail is lost by that. The wire is 640px wide either way, so after the
+#  detector's square crop the subject occupies the same number of pixels in the
+#  300x300 network input regardless of which source stream it came from.
 #
 #  CREDENTIALS
 #  -----------
@@ -47,8 +51,22 @@ CAM_HOST=${CAMERA_HOST:-192.168.100.64}
 CAM_PORT=${CAMERA_RTSP_PORT:-554}
 CAM_USER=${CAMERA_USER:-admin}
 CHANNEL=2                  # 2 = KOOCHE (alley), 1 = HAYAT (yard)
-STREAM=main                # main = H.265 1080p, sub = H.264 960x576
-SIZE=640x360               # what the board receives; 16:9 to match the main stream
+# sub, not main. The 1080p H.265 main stream does not arrive intact from this
+# DVR: RTSP reports large sequence jumps ("RTP: PT=60: bad cseq"), the reference
+# chain never closes, and every frame fails with "Error constructing the frame
+# RPS". The same DVR answers 453 Not Enough Bandwidth under load, so it simply
+# cannot sustain that bitrate. Measured over 35 s per configuration:
+#
+#     main + hardware decode   800+ errors, packet loss
+#     main + software decode   800  errors, packet loss   <- not the decoder
+#     sub  + hardware decode    26  errors, 16 hwaccel failures
+#     sub  + software decode     2  benign join messages   <- this
+#
+# Detection loses nothing: the wire is downscaled to 640px either way, so the
+# subject ends up the same size inside the 300x300 network input.
+STREAM=sub                 # main = H.265 1080p, sub = H.264 960x576
+SIZE=640x384               # 5:3, matching the sub-stream's 960x576 exactly --
+                           # scaling it to 16:9 would stretch every person
 FPS=12                     # wire rate; the detector consumes ~7
 QUALITY=4                  # ffmpeg -q:v, 2 (best) .. 31 (worst)
 PROBE_ONLY=0
@@ -143,14 +161,14 @@ case "$CHANNEL" in
 esac
 
 echo "[dvr] source  : $CAM_NAME $STREAM stream -- $SAFE_URL"
-echo "[dvr] decode  : VideoToolbox (hardware) on this laptop"
+echo "[dvr] decode  : software (libavcodec) on this laptop"
 echo "[dvr] wire    : MJPEG $SIZE @ ${FPS}fps, q=$QUALITY"
 echo "[dvr] target  : tcp://$HOST:$PORT"
 
 if [ "$PROBE_ONLY" = 1 ]; then
     echo "[dvr] probing the source for 3 s ..."
     if timeout 30 ffmpeg -hide_banner -loglevel error \
-            -rtsp_transport tcp -hwaccel videotoolbox -i "$URL" \
+            -rtsp_transport tcp -i "$URL" \
             -frames:v 30 -f null - 2>/dev/null; then
         echo "[dvr] source OK"
     else
@@ -183,9 +201,13 @@ if [ -n "$PEER" ]; then
     exit 1
 fi
 
-echo "[dvr] note    : the main stream has a long keyframe interval, so the first"
-echo "[dvr]           20-30 s produce decoder warnings while the reference chain"
-echo "[dvr]           syncs. They are suppressed and counted -- not a fault."
+echo "[dvr] note    : joining mid-GOP produces a few decoder warnings until the"
+echo "[dvr]           first keyframe. They are suppressed and counted, not a fault."
+if [ "$STREAM" = main ]; then
+    echo "[dvr] WARNING : the main stream is selected. This DVR does not deliver it"
+    echo "[dvr]           intact -- expect packet loss and a continuous stream of"
+    echo "[dvr]           'Error constructing the frame RPS'. Use --stream sub."
+fi
 echo "[dvr] press Ctrl-C to stop"
 ERRLOG=$(mktemp -t guardian-dvr) || exit 1
 trap 'rm -f "$ERRLOG"' EXIT
@@ -213,7 +235,12 @@ while true; do
     #   works on frames we are actually going to send.
     ffmpeg -hide_banner -loglevel warning \
         -rtsp_transport tcp -fflags nobuffer \
-        -hwaccel videotoolbox \
+        `# No -hwaccel. VideoToolbox failed on this DVR's video with` \
+        `# "vt decoder cb: output image buffer is null: -12909" (that is` \
+        `# kVTVideoDecoderMalfunctionErr) followed by "hardware accelerator` \
+        `# failed to decode picture" -- 16 failures in 35 s even on the` \
+        `# sub-stream, where the bitstream itself is clean. Software decode of` \
+        `# 960x576 H.264 is trivial on Apple silicon and gave 0 failures.` \
         -i "$URL" \
         -vf "fps=$FPS,scale=${SIZE/x/:}:flags=bicubic,format=yuvj420p" \
         -c:v mjpeg -q:v "$QUALITY" -f mjpeg \
