@@ -126,6 +126,28 @@ VEHICLE_MAX_AREA_FRAC = 0.50
 # Applied to the 300x300 network input only. The published frame keeps its
 # natural appearance, so the operator sees what the camera saw.
 ENHANCE_CONTRAST = True
+
+# Tuned against 271 frames captured with a person walking the alley, labelled
+# WITHOUT the detector -- background subtraction against the per-pixel median
+# marked 59 frames as containing motion and 81 as clean, so the model was never
+# asked to grade its own homework.
+#
+#   config              mean   detected@0.45   false positives
+#   no enhancement      0.016        3%             0.0%
+#   clip=3 tile=8       0.596       64%             1.2%
+#   clip=5 tile=4       0.693       81%             0.0%     <- chosen
+#   clip=8 tile=4       0.713       86%            12.3%
+#
+# tile=4 beats 8 and 16 consistently: this scene is uniformly washed out by the
+# IR illuminator, so larger tiles (fewer of them) equalise it better than many
+# small ones, which just amplify local noise.
+#
+# clip=8 was the winner on a 30-frame sample at an apparent 3% false-positive
+# rate. Across all 81 clean frames that turned out to be 12.3% -- it buys five
+# points of recall for ten times the false alarms, and this system emails on
+# detection. 5.0 is the last value that is still perfectly clean.
+CLAHE_CLIP = 5.0
+CLAHE_TILE = 4
 MOTION_THRESHOLD = 2.0      # mean absolute difference, 0..255
 MOTION_HEARTBEAT = 3.0      # seconds; re-run inference even in a still scene
 
@@ -627,7 +649,17 @@ def main() -> int:
 
     enhance = str(cfg.get("enhance_contrast", str(ENHANCE_CONTRAST))).strip().lower() \
         not in ("0", "false", "no", "off")
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8)) if enhance else None
+    try:
+        clahe_clip = float(cfg.get("clahe_clip_limit", CLAHE_CLIP))
+    except ValueError:
+        clahe_clip = CLAHE_CLIP
+    try:
+        clahe_tile = max(1, int(cfg.get("clahe_tile_grid", CLAHE_TILE)))
+    except ValueError:
+        clahe_tile = CLAHE_TILE
+    clahe = (cv2.createCLAHE(clipLimit=clahe_clip,
+                             tileGridSize=(clahe_tile, clahe_tile))
+             if enhance else None)
 
     def infer_worker():
         while RUNNING:
@@ -841,8 +873,9 @@ def main() -> int:
             f"(counted and drawn only -- never mailed or alarmed)")
     else:
         log("vehicles: disabled by config")
-    log(f"contrast equalisation on the network input: "
-        f"{'CLAHE' if clahe is not None else 'off'}")
+    log("contrast equalisation on the network input: "
+        + (f"CLAHE clip={clahe_clip} tile={clahe_tile}x{clahe_tile}"
+           if clahe is not None else "off"))
 
     while RUNNING:
         # Pick up throttling decisions from the C thermal governor.
