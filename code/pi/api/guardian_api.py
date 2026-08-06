@@ -374,7 +374,9 @@ async def root():
         "swagger_ui": "/docs",
         "redoc": "/redoc",
         "openapi": "/openapi.json",
-        "dashboard": f"https://{CFG.get('public_host', '192.168.100.26')}/",
+        # Bonjour name, not a literal IP -- the board is a DHCP client and its
+        # address moves. Only a fallback; guardian.conf normally supplies it.
+        "dashboard": f"https://{CFG.get('public_host', 'mahan.local')}/",
         "upstream": UPSTREAM,
         "note": "all logic lives in the C daemon; this layer only documents "
                 "and forwards",

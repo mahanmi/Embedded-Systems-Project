@@ -28,7 +28,9 @@
 set -uo pipefail
 
 BOARD_USER=${BOARD_USER:-mahan}
-BOARD_HOST=${BOARD_HOST:-192.168.100.26}
+# Bonjour name rather than a literal IP -- the board is a DHCP client and its
+# address moves (.26 -> .33 on 2026-08-02). See the note in stream_dvr.sh.
+BOARD_HOST=${BOARD_HOST:-mahan.local}
 BROKER_PORT=${BROKER_PORT:-1883}
 PLIST_LABEL=com.mahan.guardian.mqtt-tunnel
 PLIST_PATH="$HOME/Library/LaunchAgents/$PLIST_LABEL.plist"

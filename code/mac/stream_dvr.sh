@@ -11,6 +11,14 @@
 #  pushed the board into constant thermal throttling: 24 governor events in six
 #  hours, cycling between full rate and 2 fps.
 #
+#  PROVISIONAL (2026-08-02): that 57% was measured while the board was clamped
+#  to 600 MHz by undervoltage, so it is a share of 43% of the CPU the board is
+#  supposed to have. The same decode at 1.4 GHz should cost roughly half as much
+#  of a core, which may well make camera_source=rtsp affordable and take this
+#  script off the critical path entirely -- which is what the two-site move
+#  wants, since in socket mode the board depends on this laptop staying awake.
+#  Re-measure on-board decode once the power supply is replaced, then re-decide.
+#
 #  This script moves the decode to the machine that can afford it. The laptop
 #  pulls from the DVR, decodes, downscales, and re-encodes to MJPEG for the board
 #  -- which is exactly the cheap format the board already handled comfortably
@@ -45,9 +53,28 @@ set -uo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-HOST=${GUARDIAN_HOST:-192.168.100.26}
+# The board's Bonjour name, not a literal IP, for the same reason mqtt_host is
+# one on the board side: the board is a DHCP client and its address moves. It
+# went .26 -> .33 on 2026-08-02 after a power-supply swap, and every script that
+# hardcoded .26 silently pointed at nothing -- this one kept encoding frames and
+# throwing them at an address that no longer answered, while the board's
+# watchdog restarted the detector and mailed CAMERA TAMPERING on repeat.
+#
+# LAN only: mDNS does not cross subnets. Override with GUARDIAN_HOST once the
+# board is reached over the internet rather than from this LAN.
+HOST=${GUARDIAN_HOST:-mahan.local}
 PORT=${GUARDIAN_INGEST_PORT:-9000}
-CAM_HOST=${CAMERA_HOST:-192.168.100.64}
+# The DVR is no longer on this LAN. It stayed at the house while the board and
+# this laptop moved, so it is reached through the house's port forward on 554 --
+# i.e. this pull now crosses the internet, and it is the laptop making that hop
+# because camera_source is `socket`. In `rtsp` mode the board makes it instead.
+#
+# A literal address, and residential ones rotate: when this stops working, check
+# whether the house's WAN address has moved before debugging anything else. The
+# board's own address moving is exactly the bug that cost this session (.26 ->
+# .33), so prefer a DDNS name here once one exists -- see the two-site section
+# in deliverables/MANUAL_EXPERIMENTS.md.
+CAM_HOST=${CAMERA_HOST:-dvr.example.invalid}
 CAM_PORT=${CAMERA_RTSP_PORT:-554}
 CAM_USER=${CAMERA_USER:-admin}
 CHANNEL=2                  # 2 = KOOCHE (alley), 1 = HAYAT (yard)

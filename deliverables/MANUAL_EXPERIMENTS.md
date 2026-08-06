@@ -4,8 +4,18 @@ Everything else runs from `code/tests/`. These six need a physical action, a
 camera pointed at something, or a video recording — so the commands below do the
 measuring and you supply the part a script cannot.
 
-Run each from the project root unless noted. The board is `192.168.100.26`,
+Run each from the project root unless noted. The board is `mahan.local`,
 student number `402170516`.
+
+> **Address the board by name, not by IP.** It is a DHCP client and its address
+> moves — it went `.26` → `.33` on 2026-08-02 — which breaks every hardcoded
+> reference at once. `mahan.local` works on this LAN only; from off-LAN, set
+> `PI_HOST` / `BOARD_HOST` / `GUARDIAN_HOST` explicitly.
+
+> **⚠ The recorded timings in experiments 3-3 and 4-4 are provisional.** They were
+> measured while the board was clamped to 600 MHz by undervoltage (43% of its
+> 1.4 GHz rating) — see the note in `code/pi/config/guardian.conf`. Both need
+> re-running once the power supply is replaced. Everything else here is unaffected.
 
 Before starting any of them, make sure the capture feed is up:
 
@@ -41,19 +51,75 @@ refuses to start a second copy and names the PID of the one already running.
 
 ---
 
+## Two-site operation: the board away from the DVR
+
+The DVR stays at the house. The board and the laptop move to the other site.
+That leaves exactly one hop crossing the internet, and **which hop it is depends
+on `camera_source`** — check the deployed value before debugging anything, since
+`/etc/guardian/guardian.conf` has drifted from the repo copy before:
+
+```bash
+ssh mahan@$PI_HOST 'sudo grep -E "^camera_source" /etc/guardian/guardian.conf'
+```
+
+| `camera_source` | who pulls RTSP from the house | what needs the home address |
+|---|---|---|
+| `rtsp` | the board, directly | `camera_host` in `guardian.conf` |
+| `socket` | the laptop's `stream_dvr.sh`, which re-pushes MJPEG to the board over the local LAN | `CAMERA_HOST` in the streamer's environment |
+
+`rtsp` is the better mode once the board is away: it takes the laptop off the
+critical path entirely, so the system keeps working when the laptop sleeps,
+logs out or goes elsewhere — the failure the section above is all about.
+
+Set the addresses with environment variables rather than editing files; every
+script already reads them:
+
+```bash
+export PI_HOST=<new-site ddns name>      # code/tests/*, deliverables commands
+export CAMERA_HOST=<home ddns name>      # code/mac/stream_dvr.sh, socket mode only
+```
+
+Use DDNS names, not literal addresses. Both sites have residential IPs that
+rotate, and a hardcoded one fails silently at the worst moment.
+
+Three things to know before relying on it:
+
+* **Upload, not download, is the limit.** The house has to push the sub-stream
+  out continuously. Measure both before moving anything, and aim for sustained
+  upload of about twice the stream bitrate:
+  ```bash
+  ffprobe -v error -rtsp_transport tcp -show_entries format=bit_rate -of csv=p=0 \
+      -i "rtsp://admin:$CAMERA_PASS@$CAMERA_HOST:554/Streaming/Channels/202"
+  ```
+* **The certificate has to carry the new name**, or every remote visit is a name
+  mismatch on top of the self-signed warning:
+  ```bash
+  sudo HOST_IP=<new lan ip> PUBLIC_NAME=<new-site ddns name> /opt/guardian/bin/gen_cert.sh
+  sudo systemctl restart guardian
+  ```
+* **Stalls look different over a WAN.** A link that dies mid-stream used to wedge
+  the reader; `guardian_vision.py` now sets a 5 s FFmpeg socket deadline so it
+  reconnects instead. The symptom to watch for is `frame_age_sec` climbing and
+  never resetting:
+  ```bash
+  ssh mahan@$PI_HOST 'curl -sk https://127.0.0.1/api/v1/health' | grep -o '"frame_age_sec":[0-9.]*'
+  ```
+
+---
+
 ## 1-1 — boot time (`systemd-analyze blame`)
 
 Nothing physical is strictly required; I can run this remotely on request. It is
 listed here only because the brief asks for a **terminal screenshot**.
 
 ```bash
-ssh mahan@192.168.100.26 'sudo systemctl reboot'
+ssh mahan@mahan.local 'sudo systemctl reboot'
 ```
 
 Wait ~60 s, then:
 
 ```bash
-ssh mahan@192.168.100.26 'systemd-analyze; echo; systemd-analyze blame | head -25; echo; systemd-analyze critical-chain guardian.service'
+ssh mahan@mahan.local 'systemd-analyze; echo; systemd-analyze blame | head -25; echo; systemd-analyze critical-chain guardian.service'
 ```
 
 Screenshot the terminal. Expected: total boot time, then the per-unit table with
@@ -70,13 +136,13 @@ Screenshot the terminal. Expected: total boot time, then the per-unit table with
 thing on your phone, from the board being dark to the dashboard loading.
 
 Point the camera so the recording shows you never touch a keyboard. On the laptop
-have the browser open at `https://192.168.100.26/` and hit reload as it comes up —
+have the browser open at `https://mahan.local/` and hit reload as it comes up —
 the video should show the page going from unreachable to live on its own.
 
 To timestamp the recovery for the report:
 
 ```bash
-ssh mahan@192.168.100.26 'uptime -s; systemd-analyze'
+ssh mahan@mahan.local 'uptime -s; systemd-analyze'
 ```
 
 Save as `deliverables/videos/1-3_cold_boot.mp4`.
@@ -97,7 +163,7 @@ cd code/tests && ./exp_network.sh
 If you would rather do it by hand, the evidence to capture afterwards is:
 
 ```bash
-ssh mahan@192.168.100.26 'sudo journalctl -u guardian --since "-5 minutes" --no-pager | grep -iE "mqtt|httpd|reconnect"'
+ssh mahan@mahan.local 'sudo journalctl -u guardian --since "-5 minutes" --no-pager | grep -iE "mqtt|httpd|reconnect"'
 ```
 
 Expected: MQTT reports disconnected and retries with backoff; the web server and
@@ -127,7 +193,7 @@ cd code/tests
   so the camera meters for the background and you fall into silhouette
 
 Save one still per condition into `deliverables/screenshots/` (grab them from
-`https://192.168.100.26/` — the overlay already carries the student number, date
+`https://mahan.local/` — the overlay already carries the student number, date
 and live clock, which is what the brief wants visible).
 
 > Backlight is the one that will fail. Say so in the report and explain why: the
@@ -179,7 +245,7 @@ Reports mean, standard deviation, min and max, and writes `latency.csv`.
 
 **Physical:** film the sequence; you need to appear in frame while armed.
 
-Open `https://192.168.100.26/` and use the guard-mode toggle on the page. In a
+Open `https://mahan.local/` and use the guard-mode toggle on the page. In a
 second window, watch the alarm topic:
 
 ```bash

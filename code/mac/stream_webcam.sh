@@ -51,7 +51,10 @@
 # =============================================================================
 set -uo pipefail
 
-HOST=${GUARDIAN_HOST:-192.168.100.26}
+# Bonjour name rather than a literal IP -- the board is a DHCP client and its
+# address moves (.26 -> .33 on 2026-08-02). See the longer note in stream_dvr.sh.
+# LAN only; override with GUARDIAN_HOST from off-LAN.
+HOST=${GUARDIAN_HOST:-mahan.local}
 PORT=${GUARDIAN_INGEST_PORT:-9000}
 DEVICE=${GUARDIAN_CAM:-0}          # avfoundation index; 0 = FaceTime HD Camera
 FPS=15                             # rate put on the wire

@@ -15,7 +15,15 @@
 # =============================================================================
 set -uo pipefail
 
-PI_HOST=${PI_HOST:-192.168.100.26}
+# Bonjour name rather than a literal IP: the board is a DHCP client and its
+# address moves (.26 -> .33 on 2026-08-02), which would make every experiment
+# here fail at the SSH step for a reason that has nothing to do with what is
+# being measured. Override with PI_HOST to target a specific address.
+#
+# Note that the transcripts already in results/ record the literal .26 they were
+# taken against. That is deliberate -- they are evidence of what ran at the time
+# and are not rewritten when the address changes.
+PI_HOST=${PI_HOST:-mahan.local}
 PI_USER=${PI_USER:-mahan}
 STUDENT_ID=${STUDENT_ID:-402170516}
 TESTS_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)

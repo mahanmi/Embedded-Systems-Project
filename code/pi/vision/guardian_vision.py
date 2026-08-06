@@ -59,6 +59,22 @@ CONF_THRESHOLD = 0.45
 #       256x256 ->  998 ms      192x192 ->  589 ms
 #                               160x160 ->  489 ms
 #
+# PROVISIONAL -- every number above is roughly 2.33x too slow (2026-08-02).
+# They were taken while the board was clamped to 600 MHz instead of its rated
+# 1400 MHz by chronic undervoltage, which is invisible from Linux: the firmware
+# owns the clock and caps it below the kernel's view, so scaling_cur_freq still
+# reported 1400000 throughout. Confirmed by vcgencmd (throttled=0x50005,
+# measure_clock arm=600000000 with all four cores pinned at 58 C) and corrobo-
+# rated independently by OpenSSL SHA-256 at 37 MB/s against ~87 MB/s expected.
+#
+# Re-measured 2026-08-02 at 300x300: 1235 ms on 2 threads -- i.e. the 1368 ms
+# above reproduces, it is simply the undervolted figure. Expect ~530 ms at
+# 2 threads and ~315 ms at 4 once the power supply is replaced.
+#
+# Re-run experiment 3-3 and replace this table then. The *shape* of the curve
+# should hold (the network input dominates and scales with clock); the absolute
+# values will not.
+#
 # The capture resolution barely matters by comparison; the network input is
 # what dominates, so the thermal governor (part 4-4) throttles this too.
 DEFAULT_NET_INPUT = 300
@@ -356,9 +372,32 @@ class RtspSource:
                  password: str, transport: str = "tcp"):
         # Must be set before the first VideoCapture: OpenCV reads it when it
         # constructs the backend, not per-call. TCP because UDP silently loses
-        # slices on a busy network and the artefacts look like camera faults.
+        # slices on a busy network and the artefacts look like camera faults --
+        # and because UDP's separate RTP return ports do not survive NAT, which
+        # matters now that the DVR is reached across the internet.
+        #
+        # `timeout` is the socket read deadline in microseconds, and it is what
+        # stops a stalled link from wedging this source. A peer that completes
+        # the TCP handshake and then goes quiet -- exactly what a NAT idle
+        # timeout looks like from here -- leaves cap.read() blocking with no
+        # deadline of its own, so _pump() never reaches its reconnect path and
+        # the stream dies silently with only a climbing frame_age_sec to show
+        # for it. On a LAN this never happens, which is why it went unnoticed.
+        #
+        # Measured on the board against a listener that accepts and never
+        # answers: 30.0s to give up unset (FFmpeg's own default, and only on
+        # the open path), 3.1s with timeout;3000000. 5s here is comfortably
+        # longer than any real gap in a 12 fps sub-stream and comfortably
+        # shorter than the 30s default.
+        #
+        # NOTE the spelling: FFmpeg 5 renamed `stimeout` to `timeout` and
+        # Ubuntu 24.04 ships FFmpeg 6.1 (libavformat 60.16.100), so `timeout`
+        # is correct here. An unrecognised option is ignored rather than
+        # rejected, so a wrong name fails open -- silently restoring the very
+        # bug this prevents. Re-check with `ffmpeg -h demuxer=rtsp` if the
+        # board is ever moved to a different release.
         os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS",
-                              f"rtsp_transport;{transport}")
+                              f"rtsp_transport;{transport}|timeout;5000000")
 
         self._url = (f"rtsp://{user}:{password}@{host}:{port}"
                      f"/Streaming/Channels/{channel}")
@@ -834,7 +873,9 @@ def main() -> int:
                  "(EnvironmentFile=/etc/guardian/secrets.env missing from the unit?)")
             return 1
         src = RtspSource(
-            host=cfg.get("camera_host", "192.168.100.64"),
+            # Only a fallback; guardian.conf normally supplies it. The DVR is
+            # off-LAN behind the house's port forward, so this is a WAN address.
+            host=cfg.get("camera_host", "dvr.example.invalid"),
             port=int(cfg.get("camera_rtsp_port", 554)),
             channel=str(cfg.get("camera_channel", "202")),
             user=cfg.get("camera_user", "admin"),

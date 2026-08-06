@@ -19,9 +19,28 @@ set -euo pipefail
 
 STUDENT_ID=${STUDENT_ID:-402170516}
 CERTDIR=${CERTDIR:-/etc/guardian/certs}
-HOST_IP=${HOST_IP:-192.168.100.26}
+# The board's own LAN address, included in the SAN list so browsing by IP still
+# validates. Detected rather than hardcoded: this board is a DHCP client and its
+# address moves (.26 -> .33 on 2026-08-02). A literal default is worse than none
+# here -- regenerating with a stale one produces a certificate that quietly fails
+# to match the address it is actually served on, while the DNS names keep working
+# and hide it. Override explicitly when generating for a different host.
+#
+# May legitimately come out empty (no default route at generation time); the IP
+# entry is then omitted and the hostnames below carry the certificate, which is
+# what public_host and the mac/ scripts address the board by anyway.
+HOST_IP=${HOST_IP:-$(ip -4 route get 1 2>/dev/null | sed -n 's/.*src \([0-9.]*\).*/\1/p')}
 HOSTNAME_SHORT=$(hostname -s 2>/dev/null || echo guardian)
 DAYS=${DAYS:-825}
+
+# The name the board answers to from outside its own LAN -- a DDNS hostname
+# once the dashboard is reached over the internet rather than by LAN IP.
+# Without it in the SAN list every remote request is a name mismatch stacked
+# on top of the self-signed warning, which is a different and much noisier
+# browser dialog. Empty by default, so a LAN-only install is unchanged.
+#
+#   sudo HOST_IP=<lan ip> PUBLIC_NAME=<ddns name> ./gen_cert.sh
+PUBLIC_NAME=${PUBLIC_NAME:-}
 
 install -d -m 0755 "$CERTDIR"
 
@@ -51,12 +70,27 @@ extendedKeyUsage       = serverAuth
 subjectKeyIdentifier   = hash
 
 [alt]
-IP.1  = $HOST_IP
-IP.2  = 127.0.0.1
+IP.1  = 127.0.0.1
 DNS.1 = $HOSTNAME_SHORT
 DNS.2 = $HOSTNAME_SHORT.local
 DNS.3 = localhost
 EOF
+
+# Appended rather than written inside the heredoc: an entry with an empty value
+# (`IP.2 = `, `DNS.4 = `) is a hard openssl parse error, so the line has to be
+# absent entirely when the value is not set. 127.0.0.1 takes IP.1 because it is
+# the only address that is always there -- the board's own address is detected
+# and may legitimately be missing.
+if [ -n "$HOST_IP" ]; then
+    echo "IP.2 = $HOST_IP" >>"$CONF"
+    echo "[cert] including LAN address $HOST_IP in the SAN list"
+else
+    echo "[cert] no LAN address detected; SAN covers the hostnames only"
+fi
+if [ -n "$PUBLIC_NAME" ]; then
+    echo "DNS.4 = $PUBLIC_NAME" >>"$CONF"
+    echo "[cert] including public name $PUBLIC_NAME in the SAN list"
+fi
 
 echo "[cert] generating a $DAYS-day self-signed certificate, CN=$STUDENT_ID"
 openssl req -x509 -newkey rsa:2048 -nodes \
