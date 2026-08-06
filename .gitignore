@@ -69,6 +69,19 @@ deliverables/videos/
 .Spotlight-V100
 .Trashes
 
+# iCloud Drive resolves a sync conflict by keeping both sides and renaming one
+# to "<name> 2.<ext>". This repo lives in iCloud, and 51 of them had already
+# been committed before anyone noticed -- 7.4 MB, most of it duplicate
+# screenshots, every one byte-identical to the file beside it. They are
+# generated, never authored, so they are ignored rather than cleaned up
+# repeatedly.
+#
+# The cost is that a genuinely wanted "figure 2.png" would also be ignored.
+# That has not come up here -- no tracked file legitimately ends in " <digit>"
+# -- and when it does, `git add -f` overrides this for the one file.
+* [0-9].*
+* [0-9][0-9].*
+
 # --- scratch ----------------------------------------------------------------
 *.tmp
 *.bak
