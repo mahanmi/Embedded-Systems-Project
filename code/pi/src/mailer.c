@@ -313,9 +313,12 @@ static void *worker(void *arg)
     return NULL;
 }
 
+/* curl_global_init()/curl_global_cleanup() are NOT called here: they are
+ * process-wide and the Telegram channel uses libcurl too, so main() owns them.
+ * Two modules each calling them would mean the first one to stop tore the
+ * library out from under the other. */
 bool mailer_start(void)
 {
-    curl_global_init(CURL_GLOBAL_DEFAULT);
     M.running = true;
     M.qhead = M.qcount = 0;
     M.det_pending = false;
@@ -356,7 +359,6 @@ void mailer_stop(void)
         outgoing_free(&M.q[M.qhead]);
         M.qhead = (M.qhead + 1) % MAILQ_CAP;
     }
-    curl_global_cleanup();
 }
 
 bool mailer_notify_detection(int persons, double ts_wall, double cpu_temp_c,

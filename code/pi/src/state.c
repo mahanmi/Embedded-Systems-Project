@@ -107,6 +107,8 @@ void state_inc_mqtt_published(void)  { WITH_LOCK(S.mqtt_published++); }
 void state_inc_mqtt_failure(void)    { WITH_LOCK(S.mqtt_failures++); }
 void state_inc_mail_sent(void)       { WITH_LOCK(S.mails_sent++); }
 void state_inc_mail_suppressed(void) { WITH_LOCK(S.mails_suppressed++); }
+void state_inc_telegram_sent(void)       { WITH_LOCK(S.telegrams_sent++); }
+void state_inc_telegram_suppressed(void) { WITH_LOCK(S.telegrams_suppressed++); }
 void state_inc_alarm(void)           { WITH_LOCK(S.alarms_raised++); }
 void state_inc_http(void)            { WITH_LOCK(S.http_requests++); }
 

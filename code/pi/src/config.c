@@ -24,7 +24,10 @@ static void defaults(void)
     g_cfg.http_port     = 80;
     g_cfg.https_port    = 443;
     g_cfg.loopback_port = 8081;
-    set_str(g_cfg.public_host, sizeof g_cfg.public_host, "192.168.100.26");
+    /* Bonjour name, not a literal IP, for the same reason mqtt_host below is
+     * one -- this board is a DHCP client and its address moves. It also matches
+     * the certificate's SAN list without a regeneration. See guardian.conf. */
+    set_str(g_cfg.public_host, sizeof g_cfg.public_host, "mahan.local");
     set_str(g_cfg.tls_cert, sizeof g_cfg.tls_cert, "/etc/guardian/certs/guardian.crt");
     set_str(g_cfg.tls_key,  sizeof g_cfg.tls_key,  "/etc/guardian/certs/guardian.key");
 
@@ -43,6 +46,19 @@ static void defaults(void)
     set_str(g_cfg.mail_to,   sizeof g_cfg.mail_to,   "you@example.com");
     g_cfg.mail_debounce_sec = 30;
     g_cfg.mail_guard_debounce_sec = 3;
+
+    g_cfg.telegram_enabled = true;
+    set_str(g_cfg.telegram_api_base, sizeof g_cfg.telegram_api_base,
+            "https://api.telegram.org");
+    /* Seeded to the mail intervals so the two channels behave identically on
+     * day one; they are separate keys so Telegram can be made more responsive
+     * later without touching the brief's "one email every 30 seconds". */
+    g_cfg.telegram_debounce_sec = 30;
+    g_cfg.telegram_guard_debounce_sec = 3;
+    g_cfg.telegram_commands_enabled = true;
+    /* Long enough that a held-down button cannot make a 600 MHz board encode
+     * and upload back to back, short enough that /preview still feels live. */
+    g_cfg.telegram_preview_cooldown_sec = 10;
 
     set_str(g_cfg.db_path, sizeof g_cfg.db_path, "/var/lib/guardian/guardian.db");
     g_cfg.db_ring_size = 1000;
@@ -122,6 +138,16 @@ static void apply(const char *k, const char *v)
     I("mail_debounce_sec",       mail_debounce_sec)
     I("mail_guard_debounce_sec", mail_guard_debounce_sec)
 
+    B("telegram_enabled",            telegram_enabled)
+    S("telegram_api_base",           telegram_api_base)
+    S("telegram_chat_id",            telegram_chat_id)
+    S("telegram_proxy_url",          telegram_proxy_url)
+    S("telegram_proxy_user",         telegram_proxy_user)
+    I("telegram_debounce_sec",       telegram_debounce_sec)
+    I("telegram_guard_debounce_sec", telegram_guard_debounce_sec)
+    B("telegram_commands_enabled",   telegram_commands_enabled)
+    I("telegram_preview_cooldown_sec", telegram_preview_cooldown_sec)
+
     S("db_path",      db_path)
     I("db_ring_size", db_ring_size)
 
@@ -147,7 +173,9 @@ static bool key_is_secretish(const char *k)
 {
     static const char *banned[] = { "smtp_pass", "smtp_password", "mqtt_pass",
                                     "mqtt_password", "api_token", "password",
-                                    "token", "secret", NULL };
+                                    "token", "secret", "telegram_token",
+                                    "telegram_bot_token", "telegram_pass",
+                                    "telegram_proxy_pass", NULL };
     for (int i = 0; banned[i]; i++)
         if (!strcasecmp(k, banned[i]))
             return true;
@@ -213,6 +241,29 @@ bool config_load(const char *path)
         LOGE("GUARDIAN_API_TOKEN is shorter than 16 characters -- refusing");
         return false;
     }
+
+    /* The Telegram channel is an addition to the mail one, not a replacement,
+     * so a missing bot token disables it rather than stopping the daemon: the
+     * board must keep guarding when the second channel is unconfigured. The
+     * proxy password is optional even when the channel is on -- a deployment
+     * that can reach api.telegram.org directly needs no proxy. */
+    if (g_cfg.telegram_enabled) {
+        g_cfg.telegram_token      = getenv("GUARDIAN_TELEGRAM_TOKEN");
+        g_cfg.telegram_proxy_pass = getenv("GUARDIAN_TELEGRAM_PROXY_PASS");
+
+        if (!g_cfg.telegram_token || !*g_cfg.telegram_token) {
+            LOGW("telegram: GUARDIAN_TELEGRAM_TOKEN is not set -- the Telegram "
+                 "channel is disabled (set it with mac/set_secret.sh)");
+            g_cfg.telegram_enabled = false;
+            g_cfg.telegram_token = NULL;
+        } else if (!g_cfg.telegram_chat_id[0]) {
+            LOGW("telegram: telegram_chat_id is empty in %s -- the Telegram "
+                 "channel is disabled", path);
+            g_cfg.telegram_enabled = false;
+        }
+        if (g_cfg.telegram_proxy_pass && !*g_cfg.telegram_proxy_pass)
+            g_cfg.telegram_proxy_pass = NULL;
+    }
     return true;
 }
 
@@ -228,12 +279,28 @@ void config_log_summary(void)
     LOGI("mail       : %s -> %s via %s (debounce %ds, guard %ds)",
          g_cfg.mail_from, g_cfg.mail_to, g_cfg.smtp_url,
          g_cfg.mail_debounce_sec, g_cfg.mail_guard_debounce_sec);
+    if (g_cfg.telegram_enabled) {
+        LOGI("telegram   : chat %s via %s (proxy %s, debounce %ds, guard %ds)",
+             g_cfg.telegram_chat_id, g_cfg.telegram_api_base,
+             g_cfg.telegram_proxy_url[0] ? g_cfg.telegram_proxy_url : "none",
+             g_cfg.telegram_debounce_sec, g_cfg.telegram_guard_debounce_sec);
+        if (g_cfg.telegram_commands_enabled)
+            LOGI("tg commands: enabled, read-only (/preview cooldown %ds)",
+                 g_cfg.telegram_preview_cooldown_sec);
+        else
+            LOGI("tg commands: disabled (alerts still send)");
+    } else {
+        LOGI("telegram   : disabled");
+    }
     LOGI("storage    : %s (ring %d)", g_cfg.db_path, g_cfg.db_ring_size);
     LOGI("vision     : capture %dpx @ %d fps, network input %dpx",
          g_cfg.target_width, g_cfg.target_fps, g_cfg.target_net_input);
     LOGI("watchdog   : stale after %ds", g_cfg.watchdog_stale_sec);
     LOGI("thermal    : throttle above %.1f C, recover below %.1f C",
          g_cfg.thermal_high_c, g_cfg.thermal_low_c);
-    LOGI("secrets    : SMTP=<set,%zu chars> MQTT=<set,%zu chars> TOKEN=<set,%zu chars>",
-         strlen(g_cfg.smtp_pass), strlen(g_cfg.mqtt_pass), strlen(g_cfg.api_token));
+    LOGI("secrets    : SMTP=<set,%zu chars> MQTT=<set,%zu chars> TOKEN=<set,%zu chars> "
+         "TG=%s TGPROXY=%s",
+         strlen(g_cfg.smtp_pass), strlen(g_cfg.mqtt_pass), strlen(g_cfg.api_token),
+         g_cfg.telegram_token ? "<set>" : "<unset>",
+         g_cfg.telegram_proxy_pass ? "<set>" : "<unset>");
 }

@@ -10,6 +10,7 @@
 #include "state.h"
 #include "store.h"
 #include "sysinfo.h"
+#include "telegram.h"
 
 #include <pthread.h>
 #include <stdio.h>
@@ -177,14 +178,35 @@ static void *detect_loop(void *arg)
                      persons, iso, temp, g_cfg.student_id,
                      g_cfg.mail_debounce_sec);
             mailer_notify_event(MAIL_ALARM, subject, body, f->jpeg, f->jpeg_len);
+
+            /* Telegram has no subject line and caps captions at 1024
+             * characters, so the same event is restated compactly rather than
+             * reusing the mail body. */
+            char cap[512];
+            snprintf(cap, sizeof cap,
+                     "*** INTRUSION ***\n"
+                     "%d person(s) while armed\n"
+                     "Time: %s\n"
+                     "CPU: %.1f C\n"
+                     "Guardian %s",
+                     persons, iso, temp, g_cfg.student_id);
+            telegram_notify_event(MAIL_ALARM, cap, f->jpeg, f->jpeg_len);
         }
 
         /* Part 3-b: the ordinary (debounced) detection email. Only on a
          * rising edge -- a count going 3 -> 2 is not news. */
         bool mailed = false;
-        if (rising)
+        if (rising) {
             mailed = mailer_notify_detection(persons, f->ts_wall, temp, f->jpeg,
                                              f->jpeg_len, guard);
+            /* The second channel sees exactly the same trigger and applies its
+             * own (separately configured) debounce. Its return value is not
+             * recorded in the black box: the `emailed` column means email, and
+             * widening it would mean migrating the deployed database for
+             * something the journal already reports. */
+            telegram_notify_detection(persons, f->ts_wall, temp, f->jpeg,
+                                      f->jpeg_len, guard);
+        }
 
         /* Part 4-2: black box. `mailed` records what actually happened, so the
          * history distinguishes an event that produced its own email from one
@@ -263,6 +285,16 @@ static void apply_thermal(thermal_level_t lvl, double temp)
                    "load.");
     mailer_notify_event(MAIL_THERMAL, subject, body, NULL, 0);
 
+    char cap[384];
+    snprintf(cap, sizeof cap,
+             "Thermal %s at %.1f C\n"
+             "Level %d (%s)\n"
+             "Now: %d fps, %d px capture, %d px network\n"
+             "Guardian %s",
+             lvl == THERM_NORMAL ? "recovered" : "throttling", temp,
+             (int)lvl, LADDER[lvl].label, fps, w, net, g_cfg.student_id);
+    telegram_notify_event(MAIL_THERMAL, cap, NULL, 0);
+
     LOGW("thermal: level %d (%s) at %.1f C -> %d fps, %d px capture, "
          "%d px network", (int)lvl, LADDER[lvl].label, temp, fps, w, net);
 }
@@ -329,6 +361,16 @@ static void *supervisor_loop(void *arg)
                          "board should be inspected.\r\n",
                          age, g_cfg.watchdog_stale_sec, consecutive_restarts + 1);
                 mailer_notify_event(MAIL_WATCHDOG, subject, body, NULL, 0);
+
+                char cap[384];
+                snprintf(cap, sizeof cap,
+                         "CAMERA TAMPERING suspected\n"
+                         "No new frame for %.0f s (threshold %d s)\n"
+                         "Restarting guardian-vision.service (attempt %d)\n"
+                         "Guardian %s",
+                         age, g_cfg.watchdog_stale_sec,
+                         consecutive_restarts + 1, g_cfg.student_id);
+                telegram_notify_event(MAIL_WATCHDOG, cap, NULL, 0);
 
                 char detail[160];
                 snprintf(detail, sizeof detail,

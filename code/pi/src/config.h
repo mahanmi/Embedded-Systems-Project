@@ -51,6 +51,28 @@ struct guardian_config {
     int  mail_debounce_sec;
     int  mail_guard_debounce_sec;
 
+    /* telegram -- a second alert channel alongside the mail one. Everything
+     * here is non-secret; the bot token and the proxy password come from the
+     * environment like every other credential. */
+    bool telegram_enabled;
+    char telegram_api_base[128];   /* https://api.telegram.org              */
+    char telegram_chat_id[64];
+    /* SOCKS5 proxy, host and port only -- the credentials are deliberately
+     * NOT in this URL. api.telegram.org is unreachable directly from the
+     * deployment network, and socks5h resolves the name at the proxy so a
+     * filtered local resolver cannot break the send either. Empty means
+     * connect directly. */
+    char telegram_proxy_url[160];
+    char telegram_proxy_user[64];
+    int  telegram_debounce_sec;
+    int  telegram_guard_debounce_sec;
+    /* Inbound half: the bot reads its own messages and answers /preview with
+     * the current frame. Separate from telegram_enabled so the command surface
+     * can be shut off without losing the alerts. Every command is read-only --
+     * nothing reachable from a chat can change what the board does. */
+    bool telegram_commands_enabled;
+    int  telegram_preview_cooldown_sec;
+
     /* storage */
     char db_path[256];
     int  db_ring_size;
@@ -70,6 +92,11 @@ struct guardian_config {
     const char *smtp_pass;
     const char *mqtt_pass;
     const char *api_token;
+    /* Required only when telegram_enabled: a board with no bot configured must
+     * still boot. The proxy password is optional even then -- a deployment on
+     * an unfiltered network needs no proxy at all. */
+    const char *telegram_token;
+    const char *telegram_proxy_pass;
 };
 
 extern struct guardian_config g_cfg;

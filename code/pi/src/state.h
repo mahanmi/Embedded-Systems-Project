@@ -40,6 +40,8 @@ struct guardian_state {
     uint64_t mqtt_failures;
     uint64_t mails_sent;
     uint64_t mails_suppressed;    /* coalesced by the debounce             */
+    uint64_t telegrams_sent;
+    uint64_t telegrams_suppressed;
     uint64_t alarms_raised;
     uint64_t http_requests;
     uint64_t commands_executed;
@@ -75,6 +77,8 @@ void state_inc_mqtt_published(void);
 void state_inc_mqtt_failure(void);
 void state_inc_mail_sent(void);
 void state_inc_mail_suppressed(void);
+void state_inc_telegram_sent(void);
+void state_inc_telegram_suppressed(void);
 void state_inc_alarm(void);
 void state_inc_http(void);
 void state_inc_command(bool accepted);

@@ -10,6 +10,7 @@
 #include "state.h"
 #include "store.h"
 #include "sysinfo.h"
+#include "telegram.h"
 
 #include <json-c/json.h>
 #include <pthread.h>
@@ -193,6 +194,7 @@ char *api_stats(int *status)
         "\"oldest\":\"%s\",\"newest\":\"%s\"},"
         "\"mqtt\":{\"connected\":%s,\"published\":%llu,\"failures\":%llu},"
         "\"mail\":{\"sent\":%llu,\"coalesced\":%llu,\"healthy\":%s},"
+        "\"telegram\":{\"sent\":%llu,\"coalesced\":%llu,\"healthy\":%s},"
         "\"alarms_raised\":%llu,"
         "\"watchdog\":{\"restarts\":%d,\"vision_stale\":%s},"
         "\"thermal\":{\"level\":%d,\"events\":%d,\"peak_c\":%.1f},"
@@ -206,6 +208,9 @@ char *api_stats(int *status)
         (unsigned long long)st.mqtt_published, (unsigned long long)st.mqtt_failures,
         (unsigned long long)st.mails_sent, (unsigned long long)st.mails_suppressed,
         mailer_healthy() ? "true" : "false",
+        (unsigned long long)st.telegrams_sent,
+        (unsigned long long)st.telegrams_suppressed,
+        telegram_healthy() ? "true" : "false",
         (unsigned long long)st.alarms_raised,
         st.watchdog_restarts, st.vision_stale ? "true" : "false",
         (int)st.thermal_level, st.thermal_events, st.thermal_peak_c,
@@ -225,7 +230,49 @@ char *api_health(int *status)
     double frame_age = have_frame ? (now_mono() - ts_mono) : -1.0;
 
     bool vision_ok = have_frame && frame_age < (double)g_cfg.watchdog_stale_sec;
-    bool healthy = vision_ok && st.mqtt_connected;
+
+    /* One failed send is a blip on the uplink, not a broken system, so only a
+     * run of them pulls the top-level status down. Without this the endpoint
+     * cannot distinguish "nothing to mail yet" from "mail is down". */
+    struct mailer_health mh;
+    mailer_health(&mh);
+    bool mail_down = mh.consecutive_failures >= MAILER_FAIL_DEGRADE;
+
+    char mail_last[48];
+    if (mh.attempted) {
+        char iso[40];
+        iso8601_utc(mh.last_attempt_wall, iso, sizeof iso);
+        snprintf(mail_last, sizeof mail_last, "\"%s\"", iso);
+    } else {
+        snprintf(mail_last, sizeof mail_last, "null");
+    }
+
+    /* Reported, but deliberately NOT part of the verdict below. Telegram is
+     * reached through a proxy on a filtered network, so an outage there is an
+     * expected condition rather than a fault in this system -- letting it flip
+     * the endpoint to 503 would make "degraded" mean nothing. */
+    struct telegram_health th;
+    telegram_health(&th);
+
+    char tg_last[48];
+    if (th.attempted) {
+        char iso[40];
+        iso8601_utc(th.last_attempt_wall, iso, sizeof iso);
+        snprintf(tg_last, sizeof tg_last, "\"%s\"", iso);
+    } else {
+        snprintf(tg_last, sizeof tg_last, "null");
+    }
+
+    char tg_cmd_last[48];
+    if (th.last_update_wall > 0.0) {
+        char iso[40];
+        iso8601_utc(th.last_update_wall, iso, sizeof iso);
+        snprintf(tg_cmd_last, sizeof tg_cmd_last, "\"%s\"", iso);
+    } else {
+        snprintf(tg_cmd_last, sizeof tg_cmd_last, "null");
+    }
+
+    bool healthy = vision_ok && st.mqtt_connected && !mail_down;
 
     *status = healthy ? 200 : 503;
     return dupf(
@@ -233,12 +280,25 @@ char *api_health(int *status)
         "\"components\":{"
         "\"vision\":{\"ok\":%s,\"frame_age_sec\":%.2f},"
         "\"mqtt\":{\"ok\":%s},"
-        "\"mail\":{\"ok\":%s},"
+        "\"mail\":{\"ok\":%s,\"state\":\"%s\",\"last_attempt\":%s,"
+        "\"consecutive_failures\":%u},"
+        "\"telegram\":{\"ok\":%s,\"state\":\"%s\",\"last_attempt\":%s,"
+        "\"consecutive_failures\":%u,"
+        "\"commands\":{\"polling\":%s,\"poll_failures\":%u,"
+        "\"handled\":%llu,\"last_command\":%s}},"
         "\"storage\":{\"ok\":true}}}",
         healthy ? "ok" : "degraded", g_cfg.student_id, GUARDIAN_VERSION,
         vision_ok ? "true" : "false", frame_age,
         st.mqtt_connected ? "true" : "false",
-        mailer_healthy() ? "true" : "false");
+        mh.ok ? "true" : "false",
+        mh.attempted ? (mh.ok ? "ok" : "failing") : "idle",
+        mail_last, mh.consecutive_failures,
+        th.ok ? "true" : "false",
+        !th.enabled ? "disabled" : (th.attempted ? (th.ok ? "ok" : "failing")
+                                                 : "idle"),
+        tg_last, th.consecutive_failures,
+        th.polling ? "true" : "false", th.poll_failures,
+        (unsigned long long)th.commands_handled, tg_cmd_last);
 }
 
 /* ================================================================ commands
@@ -404,11 +464,27 @@ static char *cmd_snapshot(struct json_object *req, int *http)
     snprintf(subject, sizeof subject, "[Guardian %s] snapshot", g_cfg.student_id);
     mailer_notify_event(MAIL_DETECTION, subject, body, f->jpeg, f->jpeg_len);
 
+    char cap[384];
+    snprintf(cap, sizeof cap,
+             "Snapshot requested\n"
+             "Persons: %d\n"
+             "Time: %s\n"
+             "CPU: %.1f C\n"
+             "Guardian %s",
+             f->persons, iso, sysinfo_cpu_temp(), g_cfg.student_id);
+    telegram_notify_event(MAIL_DETECTION, cap, f->jpeg, f->jpeg_len);
+
+    struct telegram_health th;
+    telegram_health(&th);
+
     int persons = f->persons;
     uint32_t len = f->jpeg_len;
     free(f);
     *http = 202;
-    return dupf("{\"emailed\":true,\"persons\":%d,\"jpeg_bytes\":%u}", persons, len);
+    /* Both are "accepted for delivery", not "delivered" -- each channel's
+     * worker owns the outcome, and the journal is where it lands. */
+    return dupf("{\"emailed\":true,\"telegram\":%s,\"persons\":%d,\"jpeg_bytes\":%u}",
+                th.enabled ? "true" : "false", persons, len);
 }
 
 static char *cmd_publish_telemetry(struct json_object *req, int *http)

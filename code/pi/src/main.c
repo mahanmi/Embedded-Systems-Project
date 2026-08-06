@@ -30,7 +30,9 @@
 #include "state.h"
 #include "store.h"
 #include "sysinfo.h"
+#include "telegram.h"
 
+#include <curl/curl.h>
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
@@ -102,12 +104,25 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    /* Process-wide, and shared by the two libcurl users (mailer, telegram), so
+     * it is initialised once here rather than by whichever of them starts
+     * first. See the note above mailer_start(). */
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+
     if (!mailer_start()) {
         LOGE("cannot start the mail worker");
         store_close();
         shmframe_close();
+        curl_global_cleanup();
         return 1;
     }
+
+    /* Telegram is allowed to fail, like MQTT and unlike mail: it reaches the
+     * Bot API through a SOCKS5 proxy on a filtered network, and a board that
+     * refused to guard because a proxy was down would have the priorities
+     * exactly backwards. A channel that is simply unconfigured returns true. */
+    if (!telegram_start())
+        LOGW("Telegram channel did not start; continuing with email alerts only");
 
     /* MQTT is allowed to fail: the broker lives on a separate machine and the
      * board must keep guarding (and keep serving the dashboard) while the
@@ -118,9 +133,11 @@ int main(int argc, char **argv)
     if (!httpd_start()) {
         LOGE("cannot start the web server");
         mqttc_stop();
+        telegram_stop();
         mailer_stop();
         store_close();
         shmframe_close();
+        curl_global_cleanup();
         return 1;
     }
 
@@ -128,9 +145,11 @@ int main(int argc, char **argv)
         LOGE("cannot start the worker threads");
         httpd_stop();
         mqttc_stop();
+        telegram_stop();
         mailer_stop();
         store_close();
         shmframe_close();
+        curl_global_cleanup();
         return 1;
     }
 
@@ -151,9 +170,11 @@ int main(int argc, char **argv)
     events_stop();
     httpd_stop();
     mqttc_stop();
+    telegram_stop();
     mailer_stop();
     store_close();
     shmframe_close();
+    curl_global_cleanup();
 
     LOGI("shutdown complete");
     return 0;
