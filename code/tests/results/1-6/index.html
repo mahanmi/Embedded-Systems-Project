@@ -101,6 +101,13 @@
       <div class="sub" style="margin-top:8px">
         last frame <span id="frameage">--</span> ago
       </div>
+      <!-- Vehicles are informational only: they are never mailed, never raise
+           the alarm topic and never enter the black box. -->
+      <div class="sub" id="vehrow" style="margin-top:6px;display:none">
+        <span style="color:#ffb43c">&#9632;</span>
+        <b id="vehicles">0</b> <span id="vehsuffix">vehicle</span>
+        <span style="opacity:.6">&mdash; not alarmed</span>
+      </div>
     </div>
 
     <!-- part 4-1: anti-theft mode, toggled from the page and over the API -->
@@ -159,7 +166,7 @@
 <div class="card" style="margin-top:18px">
   <h2>Detection history &mdash; /api/v1/history (black box, part 4-2)</h2>
   <table>
-    <thead><tr><th>#</th><th>Time (UTC)</th><th>People</th><th>CPU &deg;C</th>
+    <thead><tr><th>#</th><th>Time (local)</th><th>People</th><th>CPU &deg;C</th>
       <th>FPS</th><th>Guard</th><th>Mailed</th></tr></thead>
     <tbody id="history"><tr><td colspan="7" class="sub">loading&hellip;</td></tr></tbody>
   </table>
@@ -168,7 +175,7 @@
 <footer>
   Raspberry Pi 3B+ &middot; C daemon (libmicrohttpd + GnuTLS, libmosquitto,
   libcurl, SQLite) &middot; OpenCV MobileNet-SSD detector<br>
-  API documentation: <a href="https://192.168.100.26:8443/docs">Swagger UI</a> &middot;
+  API documentation: <a href="https://mahan.local:8443/docs">Swagger UI</a> &middot;
   served over HTTPS with a self-signed certificate, CN = 402170516
 </footer>
 </main>
@@ -244,6 +251,12 @@ async function tick(){
       $("fps").textContent = p.fps.toFixed(1);
       $("infer").textContent = p.inference_ms.toFixed(0);
       $("frameage").textContent = p.frame_age_sec.toFixed(1) + " s";
+      // `?? 0` so a board still running the pre-vehicle build (no such key)
+      // shows nothing rather than "undefined".
+      const v = p.vehicles ?? 0;
+      $("vehrow").style.display = v ? "" : "none";
+      $("vehicles").textContent = v;
+      $("vehsuffix").textContent = v === 1 ? "vehicle" : "vehicles";
       $("streaminfo").textContent =
         p.resolution + " · " + p.fps.toFixed(1) + " fps · " +
         "inference " + p.inference_ms.toFixed(0) + " ms";
@@ -258,6 +271,22 @@ async function tick(){
   }
 }
 
+// The API deliberately serves UTC ISO-8601 with a trailing Z: an API has no
+// business guessing who is reading it, and a bare local timestamp is ambiguous
+// the moment the board and the viewer are in different zones. Localisation
+// therefore happens here, in the only place that knows the viewer's zone.
+//
+// The previous version did `.replace("Z","")`, which stripped the marker that
+// said "this is UTC" and printed the UTC value looking exactly like local time
+// -- 3.5 hours off in Tehran, with nothing on screen to reveal it.
+function localTime(iso){
+  const d = new Date(iso);                 // the Z makes this parse as UTC
+  if (isNaN(d)) return iso;                // never blank the cell on bad input
+  const p = n => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) +
+         " " + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+}
+
 async function loadHistory(){
   try {
     const r = await fetch("/api/v1/history?limit=5", {cache:"no-store"});
@@ -269,7 +298,7 @@ async function loadHistory(){
     }
     tb.innerHTML = j.records.map(r =>
       "<tr><td class='num'>" + r.id + "</td>" +
-      "<td class='num'>" + r.timestamp.replace("T"," ").replace("Z","") + "</td>" +
+      "<td class='num'>" + localTime(r.timestamp) + "</td>" +
       "<td class='num'>" + r.persons + "</td>" +
       "<td class='num'>" + r.cpu_temp_c.toFixed(1) + "</td>" +
       "<td class='num'>" + r.fps.toFixed(1) + "</td>" +

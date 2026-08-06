@@ -1,13 +1,13 @@
 # Experiment 1-2 -- SIGKILL the web server
 
-Run: 2026-07-27T04:25:58Z
+Run: 2026-08-06T19:48:06Z
 
 | | |
 |---|---|
-| PID before `kill -9` | 21711 |
-| PID after restart | 22213 |
-| systemd restart counter | 1 -> 2 |
-| time to a new process | ~11s |
+| PID before `kill -9` | 4223 |
+| PID after restart | 5874 |
+| systemd restart counter | 0 -> 1 |
+| time to a new process | ~10s |
 
 `kill -9` cannot be trapped, so the process dies without cleanup. systemd sees
 the unit fail and applies `Restart=always` with `RestartSec`, which is why the

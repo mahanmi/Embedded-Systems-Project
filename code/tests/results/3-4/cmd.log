@@ -1,32 +1,33 @@
 Failed to kill unit guardian.service: Failed to send signal SIGKILL to auxiliary processes: Invalid argument
 
 === status topic during the kill ===
-status/402170516/home {"status":"online","student_id":"402170516","timestamp":"2026-07-27T08:07:30.882Z","version":"1.0.0"}
+status/402170516/home {"status":"online","student_id":"402170516","timestamp":"2026-06-05T17:28:05.508Z","version":"1.0.0"}
 status/402170516/home {"status":"offline","student_id":"402170516","reason":"unexpected disconnect (LWT)"}
-status/402170516/home {"status":"online","student_id":"402170516","timestamp":"2026-07-27T08:11:14.431Z","version":"1.0.0"}
-{"status":"online","student_id":"402170516","timestamp":"2026-07-27T08:11:14.431Z","version":"1.0.0"}
+status/402170516/home {"status":"online","student_id":"402170516","timestamp":"2026-06-05T18:53:16.211Z","version":"1.0.0"}
+{"status":"online","student_id":"402170516","timestamp":"2026-06-05T18:53:16.211Z","version":"1.0.0"}
 
-=== broker stopped at 2026-07-27T08:11:46Z ===
+=== broker stopped at 2026-08-06T22:18:24Z ===
 
 === board log during the outage ===
-Jul 27 11:43:04 mahan guardian[47116]: 11:43:04.548 mqtt: unexpected disconnect from 127.0.0.1 (rc=7) -- will reconnect
-Jul 27 11:43:04 mahan guardian[47116]: 11:43:04.889 mqtt: publish to telemetry/402170516/home failed: The client is not currently connected.
-Jul 27 11:43:09 mahan guardian[47116]: 11:43:09.906 mqtt: publish to telemetry/402170516/home failed: The client is not currently connected.
-Jul 27 11:43:14 mahan guardian[47116]: 11:43:14.923 mqtt: publish to telemetry/402170516/home failed: The client is not currently connected.
-Jul 27 11:43:19 mahan guardian[47116]: 11:43:19.941 mqtt: publish to telemetry/402170516/home failed: The client is not currently connected.
-Jul 27 11:43:24 mahan guardian[47116]: 11:43:24.959 mqtt: publish to telemetry/402170516/home failed: The client is not currently connected.
-Jul 27 11:43:29 mahan guardian[47116]: 11:43:29.561 mqtt: no broker for 25s, trying Mahans-MacBook-Pro.local:1883 instead
-Jul 27 11:43:54 mahan guardian[47116]: 11:43:54.593 mqtt: no broker for 25s, trying 127.0.0.1:1883 instead
-Jul 27 11:43:54 mahan guardian[47116]: 11:43:54.606 mqtt: unexpected disconnect from 127.0.0.1 (rc=7) -- will reconnect
-Jul 27 11:44:19 mahan guardian[47116]: 11:44:19.616 mqtt: no broker for 25s, trying Mahans-MacBook-Pro.local:1883 instead
-Jul 27 11:44:44 mahan guardian[47116]: 11:44:44.642 mqtt: no broker for 25s, trying 127.0.0.1:1883 instead
-Jul 27 11:44:44 mahan guardian[47116]: 11:44:44.655 mqtt: unexpected disconnect from 127.0.0.1 (rc=7) -- will reconnect
+Aug 06 18:28:18 mahan guardian[8862]: 18:28:18.166 mqtt: publish to telemetry/402170516/home failed: The client is not currently connected.
+Aug 06 18:28:23 mahan guardian[8862]: 18:28:23.181 mqtt: publish to telemetry/402170516/home failed: The client is not currently connected.
+Aug 06 18:28:28 mahan guardian[8862]: 18:28:28.198 mqtt: publish to telemetry/402170516/home failed: The client is not currently connected.
+Aug 06 18:28:29 mahan guardian[8862]: 18:28:29.637 mqtt: no broker for 25s, trying Mahans-MacBook-Pro.local:1883 instead
+Aug 06 18:28:33 mahan guardian[8862]: 18:28:33.215 mqtt: publish to telemetry/402170516/home failed: The client is not currently connected.
+Aug 06 18:28:38 mahan guardian[8862]: 18:28:38.231 mqtt: publish to telemetry/402170516/home failed: The client is not currently connected.
+Aug 06 18:28:43 mahan guardian[8862]: 18:28:43.247 mqtt: publish to telemetry/402170516/home failed: The client is not currently connected.
+Aug 06 18:28:48 mahan guardian[8862]: 18:28:48.263 mqtt: publish to telemetry/402170516/home failed: The client is not currently connected.
+Aug 06 18:28:53 mahan guardian[8862]: 18:28:53.280 mqtt: publish to telemetry/402170516/home failed: The client is not currently connected.
+Aug 06 18:28:54 mahan guardian[8862]: 18:28:54.659 mqtt: no broker for 25s, trying 127.0.0.1:1883 instead
+Aug 06 18:29:19 mahan guardian[8862]: 18:29:19.678 mqtt: no broker for 25s, trying Mahans-MacBook-Pro.local:1883 instead
+Aug 06 18:29:44 mahan guardian[8862]: 18:29:44.702 mqtt: no broker for 25s, trying 127.0.0.1:1883 instead
 
 === board log after the broker returned ===
-Jul 27 11:43:54 mahan guardian[47116]: 11:43:54.593 mqtt: no broker for 25s, trying 127.0.0.1:1883 instead
-Jul 27 11:43:54 mahan guardian[47116]: 11:43:54.606 mqtt: unexpected disconnect from 127.0.0.1 (rc=7) -- will reconnect
-Jul 27 11:44:19 mahan guardian[47116]: 11:44:19.616 mqtt: no broker for 25s, trying Mahans-MacBook-Pro.local:1883 instead
-Jul 27 11:44:44 mahan guardian[47116]: 11:44:44.642 mqtt: no broker for 25s, trying 127.0.0.1:1883 instead
-Jul 27 11:44:44 mahan guardian[47116]: 11:44:44.655 mqtt: unexpected disconnect from 127.0.0.1 (rc=7) -- will reconnect
-Jul 27 11:45:09 mahan guardian[47116]: 11:45:09.675 mqtt: no broker for 25s, trying Mahans-MacBook-Pro.local:1883 instead
-Jul 27 11:45:09 mahan guardian[47116]: 11:45:09.701 mqtt: connected to Mahans-MacBook-Pro.local:1883 as 'guardian'
+Aug 06 18:28:33 mahan guardian[8862]: 18:28:33.215 mqtt: publish to telemetry/402170516/home failed: The client is not currently connected.
+Aug 06 18:28:38 mahan guardian[8862]: 18:28:38.231 mqtt: publish to telemetry/402170516/home failed: The client is not currently connected.
+Aug 06 18:28:43 mahan guardian[8862]: 18:28:43.247 mqtt: publish to telemetry/402170516/home failed: The client is not currently connected.
+Aug 06 18:28:48 mahan guardian[8862]: 18:28:48.263 mqtt: publish to telemetry/402170516/home failed: The client is not currently connected.
+Aug 06 18:28:53 mahan guardian[8862]: 18:28:53.280 mqtt: publish to telemetry/402170516/home failed: The client is not currently connected.
+Aug 06 18:28:54 mahan guardian[8862]: 18:28:54.659 mqtt: no broker for 25s, trying 127.0.0.1:1883 instead
+Aug 06 18:29:19 mahan guardian[8862]: 18:29:19.678 mqtt: no broker for 25s, trying Mahans-MacBook-Pro.local:1883 instead
+Aug 06 18:29:44 mahan guardian[8862]: 18:29:44.702 mqtt: no broker for 25s, trying 127.0.0.1:1883 instead

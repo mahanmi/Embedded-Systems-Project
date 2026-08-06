@@ -1,6 +1,6 @@
 # Experiment 3-4 -- LWT and a broker outage
 
-Run: 2026-07-27T08:15:17Z
+Run: 2026-08-06T22:24:16Z
 
 ## Part 1 -- the will actually fires
 
