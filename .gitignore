@@ -36,17 +36,32 @@ code/pi/models/
 # --- LaTeX ------------------------------------------------------------------
 # The report PDF is a deliverable but it is regenerated from source on every
 # build; committing it just produces a binary conflict on every edit.
-Tex/*.aux
-Tex/*.log
-Tex/*.out
-Tex/*.toc
-Tex/*.fls
-Tex/*.fdb_latexmk
-Tex/*.synctex.gz
-Tex/*.bbl
-Tex/*.blg
-Tex/Main.pdf
-Tex/**/*.aux
+#
+# Every rule below is `**/Tex/`, not `Tex/`. These started life root-anchored,
+# which stopped matching the moment the tree moved under deliverables/ -- the
+# rules did not error, they just silently let ten .aux files and Main.pdf back
+# in. The `**/` prefix makes them follow the directory wherever it is put.
+#
+# They stay scoped to Tex/ for a reason: a bare `*.log` would swallow the
+# cmd.log transcripts under code/tests/results/, which are tracked evidence.
+**/Tex/*.aux
+**/Tex/*.log
+**/Tex/*.out
+**/Tex/*.toc
+**/Tex/*.fls
+**/Tex/*.fdb_latexmk
+**/Tex/*.synctex.gz
+**/Tex/*.bbl
+**/Tex/*.blg
+**/Tex/Main.pdf
+**/Tex/**/*.aux
+
+# --- video evidence ---------------------------------------------------------
+# 130 MB of raw screen capture backing experiments 1-3 and 4-1. Kept on disk and
+# submitted with the report, but not committed: it would grow .git from 3 MB to
+# 135 MB, and 1-3_cold_boot.MOV alone is over GitHub's 100 MB per-file limit, so
+# carrying it would foreclose ever pushing this repo anywhere.
+deliverables/videos/
 
 # --- macOS ------------------------------------------------------------------
 .DS_Store

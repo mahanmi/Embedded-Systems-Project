@@ -320,6 +320,38 @@ class MjpegSource:
         del self.buf[:end]
         return frame
 
+    def _drain_backlog(self) -> None:
+        """Pulls any bytes already sitting in the kernel receive buffer,
+        without blocking.
+
+        The capture host writes at its own pace (the wire rate in
+        stream_webcam.sh), independent of how fast this process gets back
+        around to recv(). If it ever falls behind for a moment -- a slow
+        loop iteration, a scheduling hiccup -- full frames pile up here
+        rather than in flight, and read_image() would otherwise decode and
+        publish them one by one, always a little further behind real time.
+        MSG_DONTWAIT collects whatever has already arrived without adding
+        any wait of its own: BlockingIOError just means "nothing more right
+        now", the same as a timeout elsewhere in this class.
+        """
+        if self.conn is None:
+            return
+        try:
+            while True:
+                chunk = self.conn.recv(65536, socket.MSG_DONTWAIT)
+                if not chunk:
+                    self._drop("clean close")
+                    return
+                self.buf.extend(chunk)
+                if len(self.buf) > self.MAX_FRAME:
+                    idx = self.buf.rfind(self.SOI)
+                    warn("input buffer overflow, resynchronising")
+                    del self.buf[:idx if idx > 0 else len(self.buf)]
+        except BlockingIOError:
+            pass
+        except OSError as exc:
+            self._drop(str(exc))
+
     def read_image(self):
         """Decoded BGR frame, or None. The interface both sources share.
 
@@ -327,10 +359,22 @@ class MjpegSource:
         Moving the decode in here lets an RTSP source -- which never has a JPEG
         in the first place -- present the same interface without inventing one
         just to have it thrown away again.
+
+        If more than one complete frame is available, only the newest is
+        decoded -- the rest are dropped whole, unread, the same rule
+        RtspSource already applies at its own source (see its docstring).
+        Decoding a frame the rate limiter is about to discard anyway wastes
+        JPEG-decode CPU this board does not have to spare.
         """
         jpeg = self.read_frame()
         if jpeg is None:
             return None
+        self._drain_backlog()
+        while True:
+            newer = self._pop_frame()
+            if newer is None:
+                break
+            jpeg = newer
         return cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
 
     def close(self) -> None:

@@ -63,7 +63,7 @@ static void defaults(void)
     set_str(g_cfg.db_path, sizeof g_cfg.db_path, "/var/lib/guardian/guardian.db");
     g_cfg.db_ring_size = 1000;
 
-    g_cfg.target_fps       = 10;
+    g_cfg.target_fps       = 15;
     g_cfg.target_width     = 640;
     g_cfg.target_net_input = 300;
 
@@ -105,6 +105,39 @@ static bool truthy(const char *v)
 {
     return !strcasecmp(v, "1") || !strcasecmp(v, "true") ||
            !strcasecmp(v, "yes") || !strcasecmp(v, "on");
+}
+
+/* Keys in guardian.conf that belong to the Python vision service, which parses
+ * the same file. They are not ours to interpret, but they are not typos either,
+ * and the unknown-key warning below only earns its place if it means something:
+ * with these fifteen unlisted every startup logged fifteen warnings, so a real
+ * typo arrived as the sixteenth and nobody would ever pick it out.
+ *
+ * Names, not prefixes. Matching "camera_*" wholesale would swallow "camera_hsot"
+ * too, which is exactly the mistake the warning exists to catch. The price is
+ * that a new key in vision/guardian_vision.py has to be added here as well --
+ * cheap, and it fails loudly (one spurious warning) rather than silently.
+ *
+ * Keys both sides read -- student_id, target_fps, target_width,
+ * target_net_input -- are deliberately absent: apply() consumes those itself. */
+static bool key_belongs_to_vision(const char *k)
+{
+    static const char *vision_keys[] = {
+        /* frame source */
+        "camera_source", "camera_host", "camera_rtsp_port", "camera_channel",
+        "camera_transport", "camera_user",
+        /* detector */
+        "cv_threads", "detect_roi", "detect_roi_align",
+        /* vehicle counting */
+        "detect_vehicles", "vehicle_conf_threshold", "vehicle_hold_frames",
+        /* CLAHE contrast equalisation */
+        "enhance_contrast", "clahe_clip_limit", "clahe_tile_grid",
+        NULL
+    };
+    for (int i = 0; vision_keys[i]; i++)
+        if (!strcmp(k, vision_keys[i]))
+            return true;
+    return false;
 }
 
 static void apply(const char *k, const char *v)
@@ -164,7 +197,12 @@ static void apply(const char *k, const char *v)
 #undef I
 #undef D
 #undef B
-    LOGW("config: ignoring unknown key '%s'", k);
+
+    if (key_belongs_to_vision(k)) {
+        LOGD("config: '%s' is the vision service's, not ours -- skipping", k);
+        return;
+    }
+    LOGW("config: ignoring unknown key '%s' -- nothing in the system reads it", k);
 }
 
 /* A credential that appears in the config file is a configuration mistake we

@@ -13,7 +13,11 @@ OBJDIR  := build
 PKGS    := libmicrohttpd libmosquitto json-c sqlite3 libcurl libsystemd
 
 CC      ?= gcc
-CFLAGS  := -std=c11 -O2 -g -pipe \
+# -march=native is safe here because the build is always native (see the
+# banner above): gcc resolves it against whatever machine runs `make`,
+# whether that's the board or the brief's Linux-VM fallback, and the result
+# is never shipped anywhere else.
+CFLAGS  := -std=c11 -O2 -g -pipe -march=native \
            -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-align \
            -Wstrict-prototypes -Wmissing-prototypes -Wno-unused-parameter \
            -D_GNU_SOURCE \

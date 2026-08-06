@@ -50,7 +50,7 @@ while [ "\$(date +%s)" -lt "\$end" ]; do
     temp=\$(awk '{printf "%.2f", \$1/1000}' /sys/class/thermal/thermal_zone0/temp)
     printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' "\$(date +%s)" "\$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         "\${link:-0}" "\${carrier:-NA}" "\${mq:-NA}" "\${code:-000}" \
-        "\${pers:-NA}" "\${fps:-NA}" "\${age:-NA}" "\$temp"
+        "\${pers:-NA}" "\${fps:-NA}" "\${age:-NA}" "\$temp" >> $REMOTE
     sleep 2
 done
 SCRIPT

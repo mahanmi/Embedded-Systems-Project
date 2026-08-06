@@ -77,6 +77,32 @@ RTT=$(python3 -c "print(f'{($T1 - $T0)*1000:.1f}')")
 note "board clock is ${OFFSET}s relative to this laptop (last RTT ${RTT} ms)"
 printf 'clock offset: %ss, last RTT: %s ms\n' "$OFFSET" "$RTT" >>"$LOG"
 
+# A Pi has no battery-backed RTC, so if it can never reach an NTP server it
+# just keeps whatever stale time it booted with -- minutes to months off, not
+# the sub-second jitter this correction is meant for. Flag it loudly rather
+# than silently handing back a "corrected" latency built on a bogus offset.
+ABS_OFFSET=$(awk -v v="$OFFSET" 'BEGIN{v=(v<0)?-v:v; printf "%.0f", v}')
+CLOCK_WARN=""
+if [ "$ABS_OFFSET" -gt 60 ] 2>/dev/null; then
+    CLOCK_WARN="the board's clock is ${ABS_OFFSET}s off this laptop's -- not NTP jitter, an unsynced clock. Check \`timedatectl status\` on the board; every latency figure below is corrected by this offset and only as trustworthy as it is."
+    bad "$CLOCK_WARN"
+fi
+
+# ---------------------------------------------------- broker preflight check
+# mosquitto isn't a managed service (see MANUAL_EXPERIMENTS.md) and stops
+# silently on logout with nothing to restart it. Without this check that looks
+# identical to "nobody walked into frame" -- the subscribe below would just
+# sit there and eventually report zero samples with no clue why.
+hdr "checking the MQTT broker is reachable"
+if ! "$SUB" -h "$BROKER" -u "$VUSER" -P "$VPASS" -t '$SYS/broker/version' -C 1 -W 3 \
+        >/dev/null 2>"$DIR/broker_check.err"; then
+    bad "cannot reach the MQTT broker at $BROKER -- is mosquitto running?"
+    sed 's/^/        /' "$DIR/broker_check.err"
+    note "restart it with: /opt/homebrew/opt/mosquitto/sbin/mosquitto -c /opt/homebrew/etc/mosquitto/mosquitto.conf -d"
+    exit 1
+fi
+ok "broker reachable"
+
 # ---------------------------------------------------------- collect events
 echo "n,recv_epoch,msg_epoch,persons,raw_delta_s,corrected_delta_s" >"$CSV"
 hdr "collecting $SAMPLES detection events"
@@ -85,7 +111,7 @@ echo
 
 # Only 0 -> N transitions count: a steady stream of "still 2 people" messages
 # would otherwise be timed as if each were a fresh arrival.
-"$SUB" -h "$BROKER" -u "$VUSER" -P "$VPASS" -t "persons/$STUDENT_ID/home" 2>/dev/null |
+"$SUB" -h "$BROKER" -u "$VUSER" -P "$VPASS" -t "persons/$STUDENT_ID/home" 2>>"$LOG" |
 python3 -u -c '
 import sys, json, time, math
 
@@ -110,7 +136,7 @@ with open(csv_path, "a") as csv:
             sent = float(msg.get("epoch", 0))
             if sent:
                 raw = recv - sent
-                corrected = raw - offset
+                corrected = raw + offset
                 n += 1
                 deltas.append(corrected)
                 csv.write(f"{n},{recv:.6f},{sent:.6f},{persons},{raw:.4f},{corrected:.4f}\n")
@@ -153,6 +179,11 @@ the payload on the laptop, corrected for a measured clock offset of
 \`${OFFSET}s\` (median of five round-trip estimates; last RTT ${RTT} ms). The
 correction matters: the two ends keep independent clocks, and at this scale an
 uncorrected NTP disagreement would be larger than the quantity being measured.
+$( [ -n "$CLOCK_WARN" ] && cat <<CW
+
+**Clock warning:** $CLOCK_WARN
+CW
+)
 
 Only 0 -> N transitions are timed. Counting every \`persons\` message would time
 "still two people in the room" as though someone had just walked in, and would
