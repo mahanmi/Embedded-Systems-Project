@@ -204,7 +204,12 @@ static struct {
     pthread_mutex_t lock;
     pthread_cond_t  cv;
     bool            running;
-    bool            healthy;
+
+    /* Delivery health: the outcome of the last attempt (see mailer.h). */
+    bool            attempted;
+    bool            last_ok;
+    double          last_attempt_wall;
+    unsigned        consec_failures;
 
     /* Operational alerts: a small FIFO. */
     struct outgoing q[MAILQ_CAP];
@@ -284,12 +289,25 @@ static void *worker(void *arg)
         LOGI("mailer: \"%s\" %s in %.1fs%s", job.subject,
              ok ? "delivered" : "FAILED", now_mono() - t0,
              job.jpeg_len ? " (with attachment)" : "");
-        if (ok) {
+        if (ok)
             state_inc_mail_sent();
-            pthread_mutex_lock(&M.lock);
-            M.healthy = true;
-            pthread_mutex_unlock(&M.lock);
-        }
+
+        /* Record the outcome either way: a mailer that has started failing
+         * has to stop claiming to be healthy, or an outage is invisible from
+         * /api/v1/health. state_inc_mail_sent() takes its own lock, so it
+         * stays outside this one. */
+        pthread_mutex_lock(&M.lock);
+        M.attempted = true;
+        M.last_ok = ok;
+        M.last_attempt_wall = now_wall();
+        M.consec_failures = ok ? 0u : M.consec_failures + 1u;
+        unsigned fails = M.consec_failures;
+        pthread_mutex_unlock(&M.lock);
+
+        if (!ok && fails == MAILER_FAIL_DEGRADE)
+            LOGE("mailer: %u consecutive failures, reporting mail as degraded",
+                 fails);
+
         outgoing_free(&job);
     }
     return NULL;
@@ -301,6 +319,10 @@ bool mailer_start(void)
     M.running = true;
     M.qhead = M.qcount = 0;
     M.det_pending = false;
+    M.attempted = false;
+    M.last_ok = false;
+    M.last_attempt_wall = 0.0;
+    M.consec_failures = 0;
     /* Allow the very first detection to go out immediately. */
     M.last_det_send = now_mono() - 3600.0;
     for (int i = 0; i < 4; i++)
@@ -440,10 +462,19 @@ void mailer_notify_event(mail_kind_t kind, const char *subject,
     pthread_mutex_unlock(&M.lock);
 }
 
-bool mailer_healthy(void)
+void mailer_health(struct mailer_health *out)
 {
     pthread_mutex_lock(&M.lock);
-    bool h = M.healthy;
+    out->attempted            = M.attempted;
+    out->ok                   = !M.attempted || M.last_ok;
+    out->last_attempt_wall    = M.last_attempt_wall;
+    out->consecutive_failures = M.consec_failures;
     pthread_mutex_unlock(&M.lock);
-    return h;
+}
+
+bool mailer_healthy(void)
+{
+    struct mailer_health h;
+    mailer_health(&h);
+    return h.ok;
 }

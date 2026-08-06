@@ -62,7 +62,30 @@ bool mailer_notify_detection(int persons, double ts_wall, double cpu_temp_c,
 void mailer_notify_event(mail_kind_t kind, const char *subject,
                          const char *body, const uint8_t *jpeg, size_t jpeg_len);
 
-/* True once at least one message has been delivered successfully. */
+/* Health is the outcome of the *most recent* delivery attempt, not a sticky
+ * "it worked once" bit. Having sent nothing yet is its own state: a daemon
+ * that has had no reason to mail anybody is not broken and must not be
+ * reported as if it were.
+ *
+ *      attempted == false          -> nothing tried yet          ("idle")
+ *      attempted && last_ok        -> last message went out      ("ok")
+ *      attempted && !last_ok       -> last message failed        ("failing")
+ */
+struct mailer_health {
+    bool     attempted;             /* has any attempt finished?            */
+    bool     ok;                    /* last attempt succeeded, or none yet  */
+    double   last_attempt_wall;     /* wall clock; 0 when never attempted   */
+    unsigned consecutive_failures;  /* reset to 0 by every success          */
+};
+
+void mailer_health(struct mailer_health *out);
+
+/* Failing this many attempts in a row is treated as a real outage rather than
+ * a blip on the uplink, and is what /api/v1/health reports as degraded. The
+ * detection debounce means three failures already span a couple of minutes. */
+#define MAILER_FAIL_DEGRADE 3u
+
+/* Convenience wrapper: struct mailer_health.ok. */
 bool mailer_healthy(void);
 
 #endif /* GUARDIAN_MAILER_H */
