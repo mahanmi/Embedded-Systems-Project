@@ -1,0 +1,18 @@
+=== http://mahan.local/ ===
+HTTP/1.1 301 Moved Permanently
+HTTP/1.1 301 Moved Permanently
+Date: Fri, 05 Jun 2026 16:23:38 GMT
+Date: Fri, 05 Jun 2026 16:23:38 GMT
+Location: https://mahan.local/
+Location: https://mahan.local/
+Content-Type: text/html; charset=utf-8
+Content-Type: text/html; charset=utf-8
+Strict-Transport-Security: max-age=31536000
+Strict-Transport-Security: max-age=31536000
+Content-Length: 150
+Content-Length: 150
+
+
+<!doctype html><meta charset=utf-8><title>301 Moved Permanently</title><h1>301 Moved Permanently</h1><p>This service is available over HTTPS only.</p>
+
+followed: 200 https://mahan.local/

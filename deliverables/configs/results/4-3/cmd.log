@@ -1,0 +1,14 @@
+Netid Recv-Q Send-Q  Local Address:Port    Peer Address:PortProcess
+tcp   0      0      192.168.100.26:41398 192.168.100.64:rtsp       
+
+=== watchdog activity ===
+Jul 29 13:37:36 mahan guardian[801]: 13:37:36.957 vision pipeline STALE
+Jul 29 13:37:36 mahan guardian[801]: 13:37:36.958 watchdog: no real frame for 31 s -- restarting the detector
+Jul 29 13:37:39 mahan guardian[801]: 13:37:39.403 mailer: "[Guardian 402170516] CAMERA TAMPERING suspected" delivered in 2.4s
+Jul 29 13:37:52 mahan guardian[801]: 13:37:52.035 watchdog: frames resumed after 1 restart(s)
+Jul 29 13:39:52 mahan guardian[801]: 13:39:52.280 vision pipeline STALE
+Jul 29 13:39:52 mahan guardian[801]: 13:39:52.281 watchdog: no real frame for 33 s -- restarting the detector
+Jul 29 13:39:54 mahan guardian[801]: 13:39:54.560 mailer: "[Guardian 402170516] CAMERA TAMPERING suspected" delivered in 2.3s
+
+=== tampering alert ===
+13:39:54.560 mailer: "[Guardian 402170516] CAMERA TAMPERING suspected" delivered in 2.3s

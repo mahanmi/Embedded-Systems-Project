@@ -1,8 +1,12 @@
-# Experiments that need you at the board
+# Experiment runbook — every test, 1-1 through 4-4, one screenshot each
 
-Everything else runs from `code/tests/`. These six need a physical action, a
-camera pointed at something, or a video recording — so the commands below do the
-measuring and you supply the part a script cannot.
+Every experiment the brief asks for is listed below in order, 1-1 through 4-4.
+Seven of them (1-1, 1-3, 2-4, 3-1, 3-2, 3-5, 4-1) need a physical action, a
+camera pointed at something, or a video recording. The rest are a single
+script you run from the laptop — no hands-on-hardware step, just a command and
+a wait. Either way, every one below ends with an explicit screenshot to save
+for the report, so you can work through this list one entry at a time and know
+exactly what to run and what to capture.
 
 Run each from the project root unless noted. The board is `mahan.local`,
 student number `402170516`.
@@ -122,11 +126,60 @@ Wait ~60 s, then:
 ssh mahan@mahan.local 'systemd-analyze; echo; systemd-analyze blame | head -25; echo; systemd-analyze critical-chain guardian.service'
 ```
 
-Screenshot the terminal. Expected: total boot time, then the per-unit table with
-`guardian`, `guardian-vision` and `guardian-api` visible.
+Screenshot the terminal and save it as
+`deliverables/screenshots/1-1_boot_time.png`. Expected: total boot time, then
+the per-unit table with `guardian`, `guardian-vision` and `guardian-api`
+visible.
 
 > The detector dominates its own start-up because it loads a 23 MB Caffe model.
 > That is worth one sentence in the report — it is start-up cost, not a stall.
+
+---
+
+## 1-2 — kill -9 the web server, watch it self-heal
+
+Nothing physical required. This and 1-4/1-5/1-6 below all come from one
+script:
+
+```bash
+cd code/tests && ./exp_web.sh
+```
+
+It runs 1-2, 1-4, 1-5 and 1-6 in one pass. For 1-2 specifically it sends
+`SIGKILL` to the web server, times how long systemd takes to bring a new
+process up, and writes the journal extract to `cmd.log`.
+
+Screenshot the terminal segment covering the kill → restart → journal tail and
+save it as `deliverables/screenshots/1-2_web_restart.png`.
+
+---
+
+## 1-4 — http → https redirect
+
+Produced by the same `./exp_web.sh` run as 1-2 above — no separate command.
+
+The report wants a browser screenshot here, not a terminal one: open
+`http://mahan.local/` with devtools on the **Network** tab and photograph the
+301 entry. Save it as `deliverables/screenshots/1-4_https_redirect.png`.
+
+---
+
+## 1-5 — the self-signed certificate
+
+Also produced by the `./exp_web.sh` run. The script pulls the certificate
+fields (CN, issuer, SANs) into `cmd.log`, but the report wants the padlock
+warning itself: open `https://mahan.local/`, click through the self-signed
+warning, and screenshot the certificate/padlock dialog. Save it as
+`deliverables/screenshots/1-5_certificate.png`.
+
+---
+
+## 1-6 — the served HTML page
+
+Also produced by the `./exp_web.sh` run — it confirms the student number and
+the stream/persons/telemetry hooks are present in the markup. Open
+`https://mahan.local/` and screenshot the page itself with the title bar
+visible, save as `deliverables/screenshots/1-6_html_page.png`.
 
 ---
 
@@ -145,7 +198,62 @@ To timestamp the recovery for the report:
 ssh mahan@mahan.local 'uptime -s; systemd-analyze'
 ```
 
-Save as `deliverables/videos/1-3_cold_boot.mp4`.
+Screenshot that terminal output and save it as
+`deliverables/screenshots/1-3_cold_boot_timestamp.png` — the report wants a
+still alongside the video.
+
+Save the video as `deliverables/videos/1-3_cold_boot.mp4`.
+
+---
+
+## 2-1 — CPU temperature in three states
+
+Nothing physical required. Runs on the board over ~15 minutes (idle,
+stream-only, stream+detect — 5 minutes each):
+
+```bash
+cd code/tests && ./exp_perf.sh 2-1
+```
+
+While it's sampling "idle" the laptop's capture streamer will print
+`Connection refused` and retry — expected, not a fault, since the detector is
+briefly stopped for that state. It reconnects on its own once state (b)
+starts the detector again.
+
+Screenshot the terminal's final three-state table and save it as
+`deliverables/screenshots/2-1_thermal_states.png`.
+
+---
+
+## 2-2 — memory of the C daemon under continuous streaming
+
+Nothing physical required. ~5 minutes:
+
+```bash
+cd code/tests && ./exp_perf.sh 2-2
+```
+
+Samples RSS every 5 s while streaming and reports a leak/no-leak verdict from
+the steady-state slope.
+
+Screenshot the terminal's summary table and save it as
+`deliverables/screenshots/2-2_memory_growth.png`.
+
+---
+
+## 2-3 — 50 concurrent requests to /api/v1/telemetry
+
+Nothing physical required.
+
+```bash
+cd code/tests && ./exp_perf.sh 2-3
+```
+
+Fires 50 requests at once from the board and reports latency (min/mean/max,
+p95) and temperature before and after.
+
+Screenshot the terminal summary and save it as
+`deliverables/screenshots/2-3_api_load.png`.
 
 ---
 
@@ -165,6 +273,9 @@ If you would rather do it by hand, the evidence to capture afterwards is:
 ```bash
 ssh mahan@mahan.local 'sudo journalctl -u guardian --since "-5 minutes" --no-pager | grep -iE "mqtt|httpd|reconnect"'
 ```
+
+Screenshot that terminal output and save it as
+`deliverables/screenshots/2-4_network_drop.png`.
 
 Expected: MQTT reports disconnected and retries with backoff; the web server and
 detector keep running locally; when the cable returns the client reconnects with
@@ -194,7 +305,12 @@ cd code/tests
 
 Save one still per condition into `deliverables/screenshots/` (grab them from
 `https://mahan.local/` — the overlay already carries the student number, date
-and live clock, which is what the brief wants visible).
+and live clock, which is what the brief wants visible):
+
+- `3-1_daylight.png`
+- `3-1_artificial.png`
+- `3-1_lowlight.png`
+- `3-1_backlight.png`
 
 > Backlight is the one that will fail. Say so in the report and explain why: the
 > sensor exposes for the bright background, your face and torso lose contrast,
@@ -211,7 +327,10 @@ and live clock, which is what the brief wants visible).
 cd code/tests && ./exp_spoof.sh
 ```
 
-Capture a still of each attempt being detected (or not).
+Capture a still of each attempt being detected (or not) and save them as:
+
+- `deliverables/screenshots/3-2_spoof_printed.png` — printed photo
+- `deliverables/screenshots/3-2_spoof_screen.png` — photo on the phone screen
 
 > Expect it **to be fooled**. MobileNet-SSD is a single-frame appearance detector
 > with no liveness cue whatsoever — it has no notion of depth, texture, motion
@@ -221,6 +340,45 @@ Capture a still of each attempt being detected (or not).
 > (moiré, specular reflection), or requiring parallax across a moving camera.
 > Do not claim a fix you have not implemented — naming the right defence and
 > explaining the trade-off is the answer here.
+
+---
+
+## 3-3 — input resolution sweep
+
+**Physical:** stand in frame for the whole sweep so the detection-rate columns
+mean something (`--person`).
+
+```bash
+cd code/tests && ./exp_resolution.sh --person
+```
+
+Sweeps the detector's input edge across 300 / 224 / 160 px, 5 minutes per
+level (~15 minutes total). See the ⚠ note at the top of this file — this
+experiment's numbers are provisional until the power supply is replaced.
+
+Screenshot the terminal's final table (FPS / temperature / memory /
+detection-rate per level) and save it as
+`deliverables/screenshots/3-3_resolution_sweep.png`.
+
+---
+
+## 3-4 — LWT and a broker outage
+
+Nothing physical required, but it takes ~4 minutes (a keepalive wait plus a
+3-minute broker outage):
+
+```bash
+cd code/tests && ./exp_features.sh 3-4
+```
+
+Part 1 sends `SIGKILL` to the board's client so the broker fires the Last
+Will on `status/402170516/home`; part 2 stops the broker for 3 minutes and
+confirms the web server and detector keep working without it, then restarts
+the broker and confirms the board reconnects on its own.
+
+Screenshot the terminal showing the captured will message and the
+reconnection at the end, save as
+`deliverables/screenshots/3-4_lwt_outage.png`.
 
 ---
 
@@ -238,6 +396,38 @@ would be bigger than the thing being measured. Only 0→N transitions are timed,
 "still in frame" messages do not count as fresh arrivals.
 
 Reports mean, standard deviation, min and max, and writes `latency.csv`.
+Screenshot the terminal's summary line and save it as
+`deliverables/screenshots/3-5_latency.png`.
+
+---
+
+## 3-6 — unauthorised MQTT access
+
+Nothing physical required. This and 3-7 below come from one script:
+
+```bash
+cd code/tests && ./exp_security.sh
+```
+
+Tries an anonymous subscribe, a wrong password, and an unknown user against
+the broker — all three must be refused. If `code/mac/.secrets/mqtt.env` has
+viewer credentials, it also verifies the ACL silently drops a publish from
+the read-only account.
+
+Screenshot the terminal output for 3-6 and save it as
+`deliverables/screenshots/3-6_mqtt_unauthorized.png`.
+
+---
+
+## 3-7 — unauthorised SSH access
+
+Produced by the same `./exp_security.sh` run as 3-6 above — no separate
+command. Tries password auth, root login, and an unknown account over SSH;
+all three must be refused, and the authorised key must still work as a
+control.
+
+Screenshot the terminal output for 3-7 and save it as
+`deliverables/screenshots/3-7_ssh_unauthorized.png`.
 
 ---
 
@@ -260,8 +450,98 @@ Sequence to record:
    a message on `alarm/402170516/home`.
 4. Toggle back **off**.
 
-Save as `deliverables/videos/4-1_guard_mode.mp4`, plus a screenshot of the alarm
-message and of the email with its attachment.
+Save as `deliverables/videos/4-1_guard_mode.mp4`, plus:
+
+- `deliverables/screenshots/4-1_alarm_mqtt.png` — the `subscribe_all.sh`
+  output showing the alarm topic message
+- `deliverables/screenshots/4-1_alert_email.png` — the alert email with its
+  photo attachment
+
+---
+
+## 4-2 — the black box
+
+Nothing physical required.
+
+```bash
+cd code/tests && ./exp_features.sh 4-2
+```
+
+Reads the SQLite detection history, confirms the ring buffer stays bounded at
+`db_ring_size`, and checks `/api/v1/history` serves the same data.
+
+Screenshot the terminal's schema / row-count / recent-rows output and save it
+as `deliverables/screenshots/4-2_black_box.png`.
+
+---
+
+## 4-3 — software watchdog
+
+Nothing physical required — the capture link is cut in software, not by hand.
+Takes a few minutes (`watchdog_stale_sec` + 25 s):
+
+```bash
+cd code/tests && ./exp_features.sh 4-3
+```
+
+Blocks the capture link at the firewall, waits for the watchdog to notice,
+and confirms the detector restarts, the tampering email sends, and the main
+daemon stays up throughout.
+
+Screenshot the terminal's watchdog-fired / restart / tampering-email lines
+and save it as `deliverables/screenshots/4-3_watchdog.png`.
+
+---
+
+## 4-4 — adaptive thermal management
+
+Nothing physical required. Loads all four cores for 3 minutes (plus a second
+phase if the 70°C setpoint isn't reached — see the ⚠ note at the top of this
+file):
+
+```bash
+cd code/tests && ./exp_features.sh 4-4
+```
+
+Screenshot the terminal's peak-temperature / thermal-level output (including
+phase B, if it runs) and save it as
+`deliverables/screenshots/4-4_thermal_governor.png`.
+
+---
+
+## Screenshot checklist
+
+One still per item below goes in the report. Work down the list in order and
+check these off as you save them into `deliverables/screenshots/`:
+
+- [ ] `1-1_boot_time.png` — terminal: systemd-analyze + blame + critical-chain
+- [ ] `1-2_web_restart.png` — terminal: kill -9 → restart → journal tail
+- [ ] `1-3_cold_boot_timestamp.png` — terminal: `uptime -s` / `systemd-analyze`
+      right after the power cycle
+- [ ] `1-4_https_redirect.png` — browser devtools: the 301 redirect
+- [ ] `1-5_certificate.png` — browser: the padlock / certificate dialog
+- [ ] `1-6_html_page.png` — browser: the dashboard page, title bar visible
+- [ ] `2-1_thermal_states.png` — terminal: idle / stream-only / stream+detect table
+- [ ] `2-2_memory_growth.png` — terminal: RSS summary and slope
+- [ ] `2-3_api_load.png` — terminal: 50-request latency summary
+- [ ] `2-4_network_drop.png` — terminal: the journalctl reconnect evidence
+- [ ] `3-1_daylight.png`
+- [ ] `3-1_artificial.png`
+- [ ] `3-1_lowlight.png`
+- [ ] `3-1_backlight.png`
+- [ ] `3-2_spoof_printed.png`
+- [ ] `3-2_spoof_screen.png`
+- [ ] `3-3_resolution_sweep.png` — terminal: the FPS/temp/memory/detection table
+- [ ] `3-4_lwt_outage.png` — terminal: captured will + reconnection
+- [ ] `3-5_latency.png` — terminal: the mean/sd/min/max summary line
+- [ ] `3-6_mqtt_unauthorized.png` — terminal: refused MQTT attempts
+- [ ] `3-7_ssh_unauthorized.png` — terminal: refused SSH attempts
+- [ ] `4-1_alarm_mqtt.png` — the `subscribe_all.sh` output showing the alarm
+      topic message
+- [ ] `4-1_alert_email.png` — the alert email with photo attachment
+- [ ] `4-2_black_box.png` — terminal: schema / row count / recent rows
+- [ ] `4-3_watchdog.png` — terminal: watchdog fired / restart / tampering email
+- [ ] `4-4_thermal_governor.png` — terminal: peak temp / thermal level (+ phase B)
 
 ---
 
