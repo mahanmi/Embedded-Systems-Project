@@ -33,7 +33,7 @@ static void defaults(void)
 
     /* Bonjour name, not a literal IP: the laptop is a DHCP client and its
      * address moves. See the comment in config/guardian.conf. */
-    set_str(g_cfg.mqtt_host, sizeof g_cfg.mqtt_host, "Mahans-MacBook-Pro.local");
+    set_str(g_cfg.mqtt_host, sizeof g_cfg.mqtt_host, "your-laptop.local");
     set_str(g_cfg.mqtt_host_fallback, sizeof g_cfg.mqtt_host_fallback, "127.0.0.1");
     g_cfg.mqtt_port = 1883;
     set_str(g_cfg.mqtt_user, sizeof g_cfg.mqtt_user, "guardian");
